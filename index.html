@@ -250,13 +250,13 @@ async function initOcr() {
   const timeoutId = setTimeout(() => sendDebug({ type: "ocrInitStillWaiting", after: "15s" }), 15000);
   try {
     ocrWorker = await Tesseract.createWorker("eng", 1, {
-      // workerPath e' risolto dalla PAGINA (relativo al documento): ok relativo semplice.
-      // corePath/langPath sono risolti DENTRO il worker stesso, quindi relativi alla sua
-      // posizione (stessa cartella) — niente prefisso, cosi' funziona sia a radice del
-      // dominio sia in una sottocartella (es. GitHub Pages /fiera-scan/...).
+      // Testato dal vivo: nonostante gireranno DENTRO il worker, tesseract.js risolve
+      // corePath/langPath relativi alla PAGINA (document.location), non al worker script —
+      // su un sottopercorso (es. GitHub Pages /fiera-scan/) un path senza la cartella
+      // "vendor/tesseract/" punta alla radice del sito e fallisce (importScripts 404).
       workerPath: "vendor/tesseract/worker.min.js",
-      corePath: "tesseract-core-lstm.js",
-      langPath: ".",
+      corePath: "vendor/tesseract/tesseract-core-lstm.js",
+      langPath: "vendor/tesseract",
       cacheMethod: "none",
       // default true: crea il worker da un Blob URL intermedio, che in un contesto gia'
       // controllato dal nostro Service Worker (offline PWA) puo' bloccare l'inizializzazione
