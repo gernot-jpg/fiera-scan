@@ -1,7 +1,9 @@
 {
+  "id": ".",
   "name": "Fiera Scan",
   "short_name": "FieraScan",
   "description": "Scansione codici vendite carte singole in fiera",
+  "lang": "it",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

@@ -47,7 +47,7 @@ display:flex;align-items:center;justify-content:center}
 border-radius:16px 16px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom));transform:translateY(105%);
 transition:transform .18s ease-out;box-shadow:0 -8px 30px rgba(0,0,0,.5)}
 .sheet.show{transform:translateY(0)}
-.ocrLabel{font-size:12px;color:var(--dim);margin-bottom:6px}
+.ocrLabel{display:block;font-size:12px;color:var(--dim);margin-bottom:6px}
 .codeInput{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;
 padding:12px;font-size:20px;font-weight:700;letter-spacing:.5px;text-align:center}
 .codeInput:focus{outline:2px solid var(--accent2)}
@@ -70,10 +70,8 @@ padding:9px 10px;font-size:14px}
 .sumCard{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .sumCard .v{font-size:20px;font-weight:700}
 .sumCard .l{font-size:11px;color:var(--dim)}
-table{width:100%;border-collapse:collapse}
 .row{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
 padding:8px 10px;margin-bottom:8px}
-.row img{width:38px;height:52px;border-radius:5px;object-fit:cover;background:var(--panel2);flex-shrink:0}
 .row .rInfo{flex:1;min-width:0}
 .row .rName{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .rSub{font-size:12px;color:var(--dim)}
@@ -104,18 +102,18 @@ border-radius:12px;padding:10px 12px}
     <video id="video" playsinline muted></video>
     <div class="guide"><div class="box"></div></div>
     <div class="camControls">
-      <button class="roundBtn" id="torchBtn" title="Torcia">🔦</button>
+      <button class="roundBtn" id="torchBtn" title="Torcia" aria-label="Torcia">🔦</button>
     </div>
     <div class="hint" id="camHint">Allinea il numero sull'etichetta nel riquadro, poi premi 📷</div>
     <div class="hint" id="scanDebug" style="bottom:calc(var(--tabh) + 38px);font-size:11px;opacity:.75">avvio OCR…</div>
-    <button id="captureBtn" class="captureBtn" title="Leggi codice">📷</button>
+    <button id="captureBtn" class="captureBtn" title="Leggi codice" aria-label="Leggi codice">📷</button>
     <div class="sheet" id="confirmSheet">
-      <div class="ocrLabel">Codice letto (correggi se serve)</div>
+      <label class="ocrLabel" for="cfCode">Codice letto (correggi se serve)</label>
       <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
       <div class="qtyRow">
-        <button class="qtyBtn" id="qtyMinus">−</button>
+        <button class="qtyBtn" id="qtyMinus" aria-label="Diminuisci quantità">−</button>
         <div class="qtyVal" id="qtyVal">1</div>
-        <button class="qtyBtn" id="qtyPlus">+</button>
+        <button class="qtyBtn" id="qtyPlus" aria-label="Aumenta quantità">+</button>
       </div>
       <div class="sheetBtns">
         <button class="btnCancel" id="cfCancel">Annulla</button>
@@ -128,7 +126,7 @@ border-radius:12px;padding:10px 12px}
 <div class="view" id="listView">
   <div class="pad">
     <div class="sessionBar">
-      <input id="sessionInput" placeholder="Nome sessione fiera">
+      <input id="sessionInput" placeholder="Nome sessione fiera" aria-label="Nome sessione fiera">
       <button class="pill" id="sessSave">Salva</button>
     </div>
     <div class="summary">
@@ -197,6 +195,12 @@ function setSession(name) {
   SESSION = (name || "").trim() || todaySessionDefault();
   localStorage.setItem("fs_session", SESSION);
   document.getElementById("sessionInput").value = SESSION;
+}
+
+/* Il codice arriva dall'OCR (charset ristretto) ma il campo di conferma e' modificabile a
+   mano: se qualcuno digita virgolette/parentesi angolari non deve rompere l'HTML generato. */
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
 /* ---------- toast ---------- */
@@ -432,10 +436,10 @@ async function renderRows() {
   document.getElementById("sumQty").textContent = rows.reduce((s, r) => s + r.qty, 0);
   if (!rows.length) { list.innerHTML = '<div class="empty">Nessuna carta scansionata in questa sessione.</div>'; return; }
   list.innerHTML = rows.map((r) => `<div class="row" data-id="${r.clientId}">
-      <div class="rInfo"><div class="rName">${r.code}</div></div>
-      <div class="rQty"><button class="rMinus">−</button><span class="n">${r.qty}</span><button class="rPlus">+</button></div>
+      <div class="rInfo"><div class="rName">${escapeHtml(r.code)}</div></div>
+      <div class="rQty"><button class="rMinus" aria-label="Diminuisci quantità di ${escapeHtml(r.code)}">−</button><span class="n">${r.qty}</span><button class="rPlus" aria-label="Aumenta quantità di ${escapeHtml(r.code)}">+</button></div>
       <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
-      <button class="rDel">✕</button>
+      <button class="rDel" aria-label="Elimina ${escapeHtml(r.code)}">✕</button>
     </div>`).join("");
   list.querySelectorAll(".row").forEach((el) => {
     const cid = el.dataset.id;
@@ -485,8 +489,8 @@ async function renderSessions() {
     s.n++; s.tot += r.qty; if (r.updatedAt > s.last) s.last = r.updatedAt;
   }
   const list = Object.entries(bySession).sort((a, b) => b[1].last.localeCompare(a[1].last));
-  el.innerHTML = list.length ? list.map(([name, s]) => `<div class="sessItem" data-name="${name}">
-      <div><b>${name}</b><div class="l">${s.n} carte · ${s.tot} pezzi</div></div>
+  el.innerHTML = list.length ? list.map(([name, s]) => `<div class="sessItem" data-name="${escapeHtml(name)}">
+      <div><b>${escapeHtml(name)}</b><div class="l">${s.n} carte · ${s.tot} pezzi</div></div>
       <div class="l">${new Date(s.last).toLocaleString("it-IT")}</div>
     </div>`).join("")
     : '<div class="empty">Nessuna sessione salvata ancora.</div>';
