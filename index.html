@@ -135,6 +135,7 @@ border-radius:12px;padding:10px 12px}
     </div>
     <div class="toolbar">
       <button class="primary" id="exportBtn">📤 Esporta CSV</button>
+      <button id="siteSyncBtn">🚀 Invia al sito</button>
     </div>
     <div id="rowsList"></div>
   </div>
@@ -195,6 +196,29 @@ function setSession(name) {
   SESSION = (name || "").trim() || todaySessionDefault();
   localStorage.setItem("fs_session", SESSION);
   document.getElementById("sessionInput").value = SESSION;
+}
+
+/* ---------- relay privato per l'invio al sito ----------
+   L'app pubblica non conosce mai il Bearer token vero: manda {code,quantity} a un piccolo
+   relay (Mac o altro) che aggiunge il token e inoltra a ScaricoMagFiera. URL e token del
+   relay si passano una volta via link (?relay=...&rtoken=...) e restano in localStorage,
+   stesso pattern gia' usato in ordini-trasferte/calcolo-vendite. */
+const _u = new URLSearchParams(location.search);
+if (_u.get("relay")) localStorage.setItem("fs_relay_url", _u.get("relay").trim());
+if (_u.get("rtoken")) localStorage.setItem("fs_relay_token", _u.get("rtoken").trim());
+function relayConfigured() { return !!(localStorage.getItem("fs_relay_url") && localStorage.getItem("fs_relay_token")); }
+async function sendToSite(code, quantity) {
+  const base = localStorage.getItem("fs_relay_url").replace(/\/$/, "");
+  const tok = localStorage.getItem("fs_relay_token");
+  const r = await fetch(base + "/relay/scarico?token=" + encodeURIComponent(tok), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, quantity }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ("http " + r.status));
+  const ok = data.upstream_status >= 200 && data.upstream_status < 300;
+  if (!ok) throw new Error("sito: " + data.upstream_status + " " + (data.upstream_body || ""));
+  return data;
 }
 
 /* Il codice arriva dall'OCR (charset ristretto) ma il campo di conferma e' modificabile a
@@ -413,7 +437,30 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
   await addScan(code, pending.qty);
   toast("Aggiunto: " + code + " ×" + pending.qty);
   hideConfirmSheet(true);
+  autoSendRow(SESSION, code); // in background, non blocca lo scanner (rete lenta/assente)
 });
+
+/* Invio automatico al sito subito dopo la conferma di ogni scansione (se il relay e'
+   configurato). Se offline o il relay non risponde, la riga resta in coda con il badge
+   "da inviare" — recuperabile in qualunque momento col bottone "Invia al sito". */
+async function autoSendRow(session, code) {
+  if (!relayConfigured()) return;
+  const rows = await idbGetAll("rows");
+  const r = rows.find((x) => x.session === session && x.code === code);
+  if (!r) return;
+  const qtyToSend = r.qty - (r.sentQty || 0);
+  if (qtyToSend <= 0) return;
+  try {
+    await sendToSite(r.code, qtyToSend);
+    r.sentQty = r.qty;
+    await idbPut("rows", r);
+    toast("✔ Inviato al sito: " + code);
+  } catch (e) {
+    sendDebug({ type: "autoSendError", code, message: e.message });
+    toast("Offline: " + code + " resta in coda, invio dopo");
+  }
+  if (document.getElementById("listView").classList.contains("active")) renderRows();
+}
 
 /* ---------- coda locale (righe scansionate) — solo IndexedDB, nessun server ----------
    Niente si cancella mai da solo: "exported" e' solo un flag per non riesportare due volte
@@ -421,9 +468,12 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
 async function addScan(code, qty) {
   const rows = await idbGetAll("rows");
   const existing = rows.find((r) => r.session === SESSION && r.code === code);
+  // sentQty = quanto di questo codice e' gia' stato inviato al sito con successo: si somma
+  // solo qty, MAI sentQty, cosi' "Invia al sito" manda solo la differenza (mai due volte lo
+  // stesso pezzo).
   const row = existing
     ? { ...existing, qty: existing.qty + qty, updatedAt: nowIso(), exported: false }
-    : { clientId: uuid(), session: SESSION, code, qty, updatedAt: nowIso(), exported: false };
+    : { clientId: uuid(), session: SESSION, code, qty, updatedAt: nowIso(), exported: false, sentQty: 0 };
   await idbPut("rows", row);
 }
 
@@ -435,12 +485,18 @@ async function renderRows() {
   document.getElementById("sumRows").textContent = rows.length;
   document.getElementById("sumQty").textContent = rows.reduce((s, r) => s + r.qty, 0);
   if (!rows.length) { list.innerHTML = '<div class="empty">Nessuna carta scansionata in questa sessione.</div>'; return; }
-  list.innerHTML = rows.map((r) => `<div class="row" data-id="${r.clientId}">
+  list.innerHTML = rows.map((r) => {
+    const pending = Math.max(0, r.qty - (r.sentQty || 0));
+    const siteTag = pending === 0 && (r.sentQty || 0) > 0 ? '<span class="syncTag ok">✔ inviato</span>'
+      : pending > 0 ? `<span class="syncTag pending">${pending} da inviare</span>` : "";
+    return `<div class="row" data-id="${r.clientId}">
       <div class="rInfo"><div class="rName">${escapeHtml(r.code)}</div></div>
       <div class="rQty"><button class="rMinus" aria-label="Diminuisci quantità di ${escapeHtml(r.code)}">−</button><span class="n">${r.qty}</span><button class="rPlus" aria-label="Aumenta quantità di ${escapeHtml(r.code)}">+</button></div>
       <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
+      ${siteTag}
       <button class="rDel" aria-label="Elimina ${escapeHtml(r.code)}">✕</button>
-    </div>`).join("");
+    </div>`;
+  }).join("");
   list.querySelectorAll(".row").forEach((el) => {
     const cid = el.dataset.id;
     el.querySelector(".rPlus").addEventListener("click", () => bumpRow(cid, 1));
@@ -458,6 +514,12 @@ async function bumpRow(clientId, delta) {
   renderRows();
 }
 async function deleteRow(clientId) {
+  const r = await idbGet("rows", clientId);
+  // cancellare la riga NON annulla lo scarico gia' fatto sul sito reale: chiedo conferma
+  // esplicita per non far perdere la traccia di un pezzo gia' scaricato per davvero.
+  if (r && (r.sentQty || 0) > 0) {
+    if (!confirm(`${r.code} risulta gia' inviato al sito (${r.sentQty} pezzi). Cancellarla qui NON annulla lo scarico reale. Procedere comunque?`)) return;
+  }
   await idbDelete("rows", clientId);
   renderRows();
 }
@@ -477,6 +539,29 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
   for (const r of rows) { r.exported = true; await idbPut("rows", r); }
   renderRows();
   toast("Esportate " + rows.length + " righe");
+});
+
+document.getElementById("siteSyncBtn").addEventListener("click", async () => {
+  if (!relayConfigured()) return toast("Relay non configurato (apri il link con ?relay=...&rtoken=...)");
+  const all = await idbGetAll("rows");
+  const pending = all.filter((r) => r.session === SESSION && r.qty - (r.sentQty || 0) > 0);
+  if (!pending.length) return toast("Niente da inviare in questa sessione");
+  if (!confirm(`Inviare ${pending.length} carte al sito? Ogni invio riuscito SCARICA per davvero lo stock reale.`)) return;
+  let ok = 0, fail = 0;
+  for (const r of pending) {
+    const qtyToSend = r.qty - (r.sentQty || 0);
+    try {
+      await sendToSite(r.code, qtyToSend);
+      r.sentQty = r.qty;
+      await idbPut("rows", r);
+      ok++;
+    } catch (e) {
+      sendDebug({ type: "siteSyncError", code: r.code, message: e.message });
+      fail++;
+    }
+    renderRows();
+  }
+  toast(`Inviate ${ok}` + (fail ? `, fallite ${fail} (riprova più tardi)` : ""));
 });
 
 /* ---------- vista Storico: sessioni salvate in locale (mai cancellate) ---------- */
