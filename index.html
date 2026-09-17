@@ -444,7 +444,7 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
    configurato). Se offline o il relay non risponde, la riga resta in coda con il badge
    "da inviare" — recuperabile in qualunque momento col bottone "Invia al sito". */
 async function autoSendRow(session, code) {
-  if (!relayConfigured()) return;
+  if (!relayConfigured()) { toast("Relay non configurato: " + code + " resta solo in locale"); return; }
   const rows = await idbGetAll("rows");
   const r = rows.find((x) => x.session === session && x.code === code);
   if (!r) return;
