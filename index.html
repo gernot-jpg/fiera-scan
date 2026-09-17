@@ -1,0 +1,508 @@
+<title>Fiera Scan</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#184f95">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- iOS ignora le icone del web manifest per "Aggiungi a Home": serve questo link dedicato -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fiera Scan">
+<style>
+:root{color-scheme:dark;--bg:#0b0f16;--panel:#151b26;--panel2:#1c2433;--line:#2a3344;--fg:#eef2f8;--dim:#93a1b8;
+--accent:#184f95;--accent2:#3f7fd6;--good:#2fae66;--warn:#e0a13b;--bad:#e0563b;
+--tabh:calc(70px + env(safe-area-inset-bottom))}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button{font:inherit;cursor:pointer}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--panel);border-top:1px solid var(--line);
+padding-bottom:env(safe-area-inset-bottom);z-index:20}
+.tabs button{flex:1;background:none;border:none;color:var(--dim);padding:10px 0 8px;font-size:12px;display:flex;
+flex-direction:column;align-items:center;gap:2px}
+.tabs button .ic{font-size:20px}
+.tabs button.active{color:var(--fg)}
+.topbar{position:sticky;top:0;z-index:15;display:flex;align-items:center;gap:8px;padding:10px 12px;
+padding-top:calc(10px + env(safe-area-inset-top));background:var(--panel);border-bottom:1px solid var(--line)}
+.topbar h1{font-size:15px;margin:0;flex:1;font-weight:600}
+.view{display:none;padding-bottom:var(--tabh)}
+.view.active{display:block}
+/* fixed anziche' in flusso: cosi' la topbar (sticky, sopra nel DOM) non si somma a 100dvh
+   spingendo il fondo della camera (stato/pannello conferma) fuori dallo schermo */
+#scanView.active{display:flex;flex-direction:column;position:fixed;inset:0;z-index:1;padding-bottom:0}
+.camWrap{position:relative;flex:1;background:#000;overflow:hidden}
+#video{width:100%;height:100%;object-fit:cover;display:block}
+.guide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.guide .box{width:82%;max-width:440px;height:58px;border:3px solid rgba(255,255,255,.85);border-radius:10px;
+box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+.camControls{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;display:flex;gap:8px}
+.roundBtn{width:42px;height:42px;border-radius:50%;border:none;background:rgba(20,26,38,.75);color:#fff;font-size:18px;
+display:flex;align-items:center;justify-content:center}
+.roundBtn.on{background:var(--accent2)}
+.captureBtn{position:absolute;left:50%;bottom:calc(var(--tabh) + 62px);transform:translateX(-50%);width:64px;height:64px;
+border-radius:50%;border:4px solid rgba(255,255,255,.9);background:rgba(20,26,38,.55);color:#fff;font-size:26px;
+display:flex;align-items:center;justify-content:center}
+.captureBtn:active{background:var(--accent2)}
+.hint{position:absolute;bottom:calc(var(--tabh) + 14px);left:0;right:0;text-align:center;color:#dfe6f2;font-size:13px;text-shadow:0 1px 3px #000}
+.sheet{position:absolute;left:0;right:0;bottom:var(--tabh);background:var(--panel);border-top:1px solid var(--line);
+border-radius:16px 16px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom));transform:translateY(105%);
+transition:transform .18s ease-out;box-shadow:0 -8px 30px rgba(0,0,0,.5)}
+.sheet.show{transform:translateY(0)}
+.ocrLabel{font-size:12px;color:var(--dim);margin-bottom:6px}
+.codeInput{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;
+padding:12px;font-size:20px;font-weight:700;letter-spacing:.5px;text-align:center}
+.codeInput:focus{outline:2px solid var(--accent2)}
+.qtyRow{display:flex;align-items:center;justify-content:center;gap:14px;margin:16px 0}
+.qtyBtn{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font-size:22px}
+.qtyVal{font-size:28px;font-weight:700;min-width:52px;text-align:center}
+.sheetBtns{display:flex;gap:10px}
+.sheetBtns button{flex:1;padding:13px;border-radius:12px;border:none;font-size:15px;font-weight:600}
+.btnAdd{background:var(--good);color:#08170f}
+.btnCancel{background:var(--panel2);color:var(--fg)}
+.pad{padding:12px}
+.sessionBar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sessionBar input{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;
+padding:9px 10px;font-size:14px}
+.pill{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:10px;padding:9px 12px;font-size:13px}
+.toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.toolbar button{background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:9px 12px;font-size:13px}
+.toolbar button.primary{background:var(--accent);border-color:var(--accent)}
+.summary{display:flex;gap:10px;margin-bottom:12px}
+.sumCard{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.sumCard .v{font-size:20px;font-weight:700}
+.sumCard .l{font-size:11px;color:var(--dim)}
+table{width:100%;border-collapse:collapse}
+.row{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+padding:8px 10px;margin-bottom:8px}
+.row img{width:38px;height:52px;border-radius:5px;object-fit:cover;background:var(--panel2);flex-shrink:0}
+.row .rInfo{flex:1;min-width:0}
+.row .rName{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .rSub{font-size:12px;color:var(--dim)}
+.rQty{display:flex;align-items:center;gap:6px}
+.rQty button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg)}
+.rQty .n{min-width:22px;text-align:center;font-weight:700}
+.rDel{background:none;border:none;color:var(--bad);font-size:18px;padding:4px 6px}
+.syncTag{font-size:10px;padding:2px 6px;border-radius:8px}
+.syncTag.ok{background:#123321;color:var(--good)}
+.syncTag.pending{background:#3a2f14;color:var(--warn)}
+.empty{text-align:center;color:var(--dim);padding:40px 20px}
+.toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:#20283a;color:#fff;padding:9px 16px;
+border-radius:20px;font-size:13px;z-index:50;opacity:0;transition:opacity .2s}
+.toast.show{opacity:1}
+.sessList{display:flex;flex-direction:column;gap:8px}
+.sessItem{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--line);
+border-radius:12px;padding:10px 12px}
+.sessItem b{font-size:14px}
+.sessItem .l{font-size:12px;color:var(--dim)}
+</style>
+
+<div class="topbar">
+  <h1 id="topTitle">Scansiona</h1>
+</div>
+
+<div class="view active" id="scanView">
+  <div class="camWrap">
+    <video id="video" playsinline muted></video>
+    <div class="guide"><div class="box"></div></div>
+    <div class="camControls">
+      <button class="roundBtn" id="torchBtn" title="Torcia">🔦</button>
+    </div>
+    <div class="hint" id="camHint">Allinea il numero sull'etichetta nel riquadro, poi premi 📷</div>
+    <div class="hint" id="scanDebug" style="bottom:calc(var(--tabh) + 38px);font-size:11px;opacity:.75">avvio OCR…</div>
+    <button id="captureBtn" class="captureBtn" title="Leggi codice">📷</button>
+    <div class="sheet" id="confirmSheet">
+      <div class="ocrLabel">Codice letto (correggi se serve)</div>
+      <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      <div class="qtyRow">
+        <button class="qtyBtn" id="qtyMinus">−</button>
+        <div class="qtyVal" id="qtyVal">1</div>
+        <button class="qtyBtn" id="qtyPlus">+</button>
+      </div>
+      <div class="sheetBtns">
+        <button class="btnCancel" id="cfCancel">Annulla</button>
+        <button class="btnAdd" id="cfAdd">✅ Aggiungi</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="view" id="listView">
+  <div class="pad">
+    <div class="sessionBar">
+      <input id="sessionInput" placeholder="Nome sessione fiera">
+      <button class="pill" id="sessSave">Salva</button>
+    </div>
+    <div class="summary">
+      <div class="sumCard"><div class="v" id="sumRows">0</div><div class="l">carte diverse</div></div>
+      <div class="sumCard"><div class="v" id="sumQty">0</div><div class="l">pezzi totali</div></div>
+    </div>
+    <div class="toolbar">
+      <button class="primary" id="exportBtn">📤 Esporta CSV</button>
+    </div>
+    <div id="rowsList"></div>
+  </div>
+</div>
+
+<div class="view" id="sessionsView">
+  <div class="pad">
+    <div class="sessList" id="sessList"></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-view="scanView"><span class="ic">📷</span>Scansiona</button>
+  <button class="tab" data-view="listView"><span class="ic">🗂️</span>Sessione</button>
+  <button class="tab" data-view="sessionsView"><span class="ic">📋</span>Storico</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="vendor/tesseract/tesseract.min.js"></script>
+<script>
+/* App 100% locale: nessun server, nessuna rete richiesta per scansionare/salvare/esportare.
+   sendDebug logga in console (utile con Safari Web Inspector collegato via cavo), non manda
+   nulla in rete. */
+function sendDebug(obj) { try { console.log("[fiera-scan]", obj); } catch (e) {} }
+window.addEventListener("error", (e) => sendDebug({ type: "error", message: e.message, file: e.filename, line: e.lineno, col: e.colno }));
+window.addEventListener("unhandledrejection", (e) => sendDebug({ type: "unhandledrejection", reason: String(e.reason && e.reason.message || e.reason) }));
+
+/* ---------- IndexedDB minimale ---------- */
+let DB;
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open("fiera-scan", 1);
+    rq.onupgradeneeded = () => {
+      const db = rq.result;
+      if (!db.objectStoreNames.contains("rows")) db.createObjectStore("rows", { keyPath: "clientId" });
+    };
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+function tx(store, mode) { return DB.transaction(store, mode).objectStore(store); }
+function idbGetAll(store) { return new Promise((res, rej) => { const rq = tx(store, "readonly").getAll(); rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error); }); }
+function idbGet(store, key) { return new Promise((res, rej) => { const rq = tx(store, "readonly").get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error); }); }
+function idbPut(store, val) { return new Promise((res, rej) => { const rq = tx(store, "readwrite").put(val); rq.onsuccess = () => res(); rq.onerror = () => rej(rq.error); }); }
+function idbDelete(store, key) { return new Promise((res, rej) => { const rq = tx(store, "readwrite").delete(key); rq.onsuccess = () => res(); rq.onerror = () => rej(rq.error); }); }
+
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "id" + Date.now() + Math.random().toString(16).slice(2));
+const nowIso = () => new Date().toISOString();
+
+/* ---------- sessione fiera corrente ---------- */
+function todaySessionDefault() {
+  const d = new Date();
+  return "Fiera " + d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+let SESSION = localStorage.getItem("fs_session") || todaySessionDefault();
+function setSession(name) {
+  SESSION = (name || "").trim() || todaySessionDefault();
+  localStorage.setItem("fs_session", SESSION);
+  document.getElementById("sessionInput").value = SESSION;
+}
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove("show"), 1800);
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+  document.querySelectorAll(".view").forEach((x) => x.classList.remove("active"));
+  b.classList.add("active");
+  document.getElementById(b.dataset.view).classList.add("active");
+  document.getElementById("topTitle").textContent = b.dataset.view === "scanView" ? "Scansiona" :
+    b.dataset.view === "listView" ? "Sessione: " + SESSION : "Storico sessioni";
+  if (b.dataset.view === "listView") renderRows();
+  if (b.dataset.view === "sessionsView") renderSessions();
+}));
+
+/* ---------- fotocamera + OCR (Tesseract.js, offline dopo il primo avvio) ---------- */
+let stream, ocrWorker, ocrReady = false, scanPaused = false;
+const video = document.getElementById("video");
+
+function updateDebug() {
+  const el = document.getElementById("scanDebug");
+  if (!el) return;
+  el.textContent = `OCR ${ocrReady ? "pronto" : "in caricamento…"} · frame ${video.videoWidth}x${video.videoHeight} rs${video.readyState}`;
+}
+setInterval(updateDebug, 500);
+
+async function startCamera() {
+  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } } });
+  video.srcObject = stream;
+  await video.play();
+  const track = stream.getVideoTracks()[0];
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  document.getElementById("torchBtn").style.display = caps.torch ? "flex" : "none";
+}
+
+async function initOcr() {
+  sendDebug({ type: "ocrInitStart" });
+  const timeoutId = setTimeout(() => sendDebug({ type: "ocrInitStillWaiting", after: "15s" }), 15000);
+  try {
+    ocrWorker = await Tesseract.createWorker("eng", 1, {
+      // workerPath e' risolto dalla PAGINA (relativo al documento): ok relativo semplice.
+      // corePath/langPath sono risolti DENTRO il worker stesso, quindi relativi alla sua
+      // posizione (stessa cartella) — niente prefisso, cosi' funziona sia a radice del
+      // dominio sia in una sottocartella (es. GitHub Pages /fiera-scan/...).
+      workerPath: "vendor/tesseract/worker.min.js",
+      corePath: "tesseract-core-lstm.js",
+      langPath: ".",
+      cacheMethod: "none",
+      // default true: crea il worker da un Blob URL intermedio, che in un contesto gia'
+      // controllato dal nostro Service Worker (offline PWA) puo' bloccare l'inizializzazione
+      // su iOS senza generare un errore intercettabile. Diretto sul file = piu' prevedibile.
+      workerBlobURL: false,
+      gzip: true,
+      logger: (m) => sendDebug({ type: "ocrProgress", status: m.status, progress: m.progress }),
+    });
+    clearTimeout(timeoutId);
+    // riga singola, alfanumerico + punto/trattino: basta per un codice tipo "MTG-261.417"
+    await ocrWorker.setParameters({
+      tessedit_pageseg_mode: "7",
+      tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ.-",
+    });
+    ocrReady = true;
+    sendDebug({ type: "ocrReady" });
+  } catch (e) {
+    clearTimeout(timeoutId);
+    sendDebug({ type: "ocrInitError", message: e.message, stack: String(e.stack || "").slice(0, 300) });
+    document.getElementById("camHint").textContent = "OCR non disponibile: " + e.message;
+  }
+}
+
+function stopCamera() {
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+}
+
+document.getElementById("torchBtn").addEventListener("click", async () => {
+  const track = stream && stream.getVideoTracks()[0];
+  if (!track) return;
+  const on = !document.getElementById("torchBtn").classList.contains("on");
+  try { await track.applyConstraints({ advanced: [{ torch: on }] }); document.getElementById("torchBtn").classList.toggle("on", on); }
+  catch (e) { toast("Torcia non supportata"); }
+});
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.2, ctx.currentTime);
+    o.start(); o.stop(ctx.currentTime + 0.08);
+  } catch (e) {}
+}
+
+/* Otsu su istogramma 0-255: stessa ricetta usata da mtg-scanner (recognizer.py) per il testo
+   delle carte — binarizzazione pulita bianco/nero prima di passare l'immagine a Tesseract. */
+function otsuThreshold(gray) {
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < gray.length; i++) hist[gray[i]]++;
+  const total = gray.length;
+  let sum = 0; for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sumB = 0, wB = 0, best = 0, thresh = 127;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t]; if (!wB) continue;
+    const wF = total - wB; if (!wF) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB, mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > best) { best = between; thresh = t; }
+  }
+  return thresh;
+}
+
+/* Ritaglia il riquadro guida dal frame video corrente, lo scala 3x e lo binarizza (Otsu).
+   Il video e' renderizzato con object-fit:cover: la mappatura tiene conto del crop/scala
+   che il browser applica per riempire il riquadro con l'immagine nativa della fotocamera. */
+function captureGuideCrop() {
+  const boxRect = document.querySelector(".guide .box").getBoundingClientRect();
+  const wrapRect = document.querySelector(".camWrap").getBoundingClientRect();
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const scale = Math.max(wrapRect.width / vw, wrapRect.height / vh);
+  const offX = (wrapRect.width - vw * scale) / 2, offY = (wrapRect.height - vh * scale) / 2;
+  const bx = (boxRect.left - wrapRect.left - offX) / scale;
+  let by = (boxRect.top - wrapRect.top - offY) / scale;
+  let bh = boxRect.height / scale;
+  const bw = boxRect.width / scale;
+  // margine verticale ridotto: se l'utente allinea con un po' di gioco, il riquadro pieno
+  // rischia di prendere anche un pezzo della riga sopra/sotto sull'etichetta (visto in test:
+  // un carattere spurio in coda, es. "MTG-261.417" letto come "MTG-261.417J").
+  const VERT_INSET = 0.16;
+  const trim = bh * VERT_INSET;
+  by += trim; bh -= trim * 2;
+
+  const SCALE_UP = 3;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(bw * SCALE_UP));
+  c.height = Math.max(1, Math.round(bh * SCALE_UP));
+  const ctx = c.getContext("2d");
+  ctx.drawImage(video, bx, by, bw, bh, 0, 0, c.width, c.height);
+
+  const imgData = ctx.getImageData(0, 0, c.width, c.height);
+  const gray = new Uint8ClampedArray(c.width * c.height);
+  for (let i = 0, p = 0; i < imgData.data.length; i += 4, p++) {
+    gray[p] = (imgData.data[i] * 0.299 + imgData.data[i + 1] * 0.587 + imgData.data[i + 2] * 0.114) | 0;
+  }
+  const th = otsuThreshold(gray);
+  for (let i = 0, p = 0; i < imgData.data.length; i += 4, p++) {
+    const v = gray[p] > th ? 255 : 0;
+    imgData.data[i] = imgData.data[i + 1] = imgData.data[i + 2] = v;
+  }
+  ctx.putImageData(imgData, 0, 0);
+  return c;
+}
+
+function cleanCode(raw) { return raw.replace(/\s+/g, "").toUpperCase(); }
+
+document.getElementById("captureBtn").addEventListener("click", async () => {
+  if (scanPaused) return;
+  if (!ocrReady || !ocrWorker) { toast("OCR ancora in caricamento, attendi un attimo…"); return; }
+  scanPaused = true;
+  const btn = document.getElementById("captureBtn");
+  btn.textContent = "⏳";
+  try {
+    const canvas = captureGuideCrop();
+    const { data } = await ocrWorker.recognize(canvas);
+    const raw = (data.text || "").trim();
+    sendDebug({ type: "ocrResult", raw });
+    if (navigator.vibrate) navigator.vibrate(70);
+    beep();
+    pending = { code: cleanCode(raw), qty: 1 };
+    showConfirmSheet();
+  } catch (e) {
+    sendDebug({ type: "ocrError", message: e.message });
+    toast("Errore OCR: " + e.message);
+    scanPaused = false;
+  } finally {
+    btn.textContent = "📷";
+  }
+});
+
+/* ---------- flusso: cattura -> codice modificabile + qty -> aggiungi ---------- */
+let pending = null; // { code, qty }
+function showConfirmSheet() {
+  const input = document.getElementById("cfCode");
+  input.value = pending.code;
+  document.getElementById("qtyVal").textContent = pending.qty;
+  document.getElementById("confirmSheet").classList.add("show");
+  input.focus();
+  input.select();
+}
+function hideConfirmSheet(resume) {
+  document.getElementById("confirmSheet").classList.remove("show");
+  pending = null;
+  if (resume) setTimeout(() => { scanPaused = false; }, 350);
+}
+document.getElementById("qtyMinus").addEventListener("click", () => { if (pending && pending.qty > 1) { pending.qty--; document.getElementById("qtyVal").textContent = pending.qty; } });
+document.getElementById("qtyPlus").addEventListener("click", () => { if (pending) { pending.qty++; document.getElementById("qtyVal").textContent = pending.qty; } });
+document.getElementById("cfCancel").addEventListener("click", () => hideConfirmSheet(true));
+document.getElementById("cfAdd").addEventListener("click", async () => {
+  if (!pending) return;
+  const code = (document.getElementById("cfCode").value || "").trim();
+  if (!code) { toast("Codice vuoto"); return; }
+  await addScan(code, pending.qty);
+  toast("Aggiunto: " + code + " ×" + pending.qty);
+  hideConfirmSheet(true);
+});
+
+/* ---------- coda locale (righe scansionate) — solo IndexedDB, nessun server ----------
+   Niente si cancella mai da solo: "exported" e' solo un flag per non riesportare due volte
+   le stesse righe, la cronologia resta salvata per sempre (pesa pochissimo). */
+async function addScan(code, qty) {
+  const rows = await idbGetAll("rows");
+  const existing = rows.find((r) => r.session === SESSION && r.code === code);
+  const row = existing
+    ? { ...existing, qty: existing.qty + qty, updatedAt: nowIso(), exported: false }
+    : { clientId: uuid(), session: SESSION, code, qty, updatedAt: nowIso(), exported: false };
+  await idbPut("rows", row);
+}
+
+/* ---------- vista Sessione: elenco righe ---------- */
+async function renderRows() {
+  const all = await idbGetAll("rows");
+  const rows = all.filter((r) => r.session === SESSION).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const list = document.getElementById("rowsList");
+  document.getElementById("sumRows").textContent = rows.length;
+  document.getElementById("sumQty").textContent = rows.reduce((s, r) => s + r.qty, 0);
+  if (!rows.length) { list.innerHTML = '<div class="empty">Nessuna carta scansionata in questa sessione.</div>'; return; }
+  list.innerHTML = rows.map((r) => `<div class="row" data-id="${r.clientId}">
+      <div class="rInfo"><div class="rName">${r.code}</div></div>
+      <div class="rQty"><button class="rMinus">−</button><span class="n">${r.qty}</span><button class="rPlus">+</button></div>
+      <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
+      <button class="rDel">✕</button>
+    </div>`).join("");
+  list.querySelectorAll(".row").forEach((el) => {
+    const cid = el.dataset.id;
+    el.querySelector(".rPlus").addEventListener("click", () => bumpRow(cid, 1));
+    el.querySelector(".rMinus").addEventListener("click", () => bumpRow(cid, -1));
+    el.querySelector(".rDel").addEventListener("click", () => deleteRow(cid));
+  });
+}
+async function bumpRow(clientId, delta) {
+  const r = await idbGet("rows", clientId);
+  if (!r) return;
+  r.qty = Math.max(0, r.qty + delta);
+  r.updatedAt = nowIso();
+  if (r.qty === 0) await idbDelete("rows", clientId);
+  else await idbPut("rows", r);
+  renderRows();
+}
+async function deleteRow(clientId) {
+  await idbDelete("rows", clientId);
+  renderRows();
+}
+
+document.getElementById("sessSave").addEventListener("click", () => { setSession(document.getElementById("sessionInput").value); renderRows(); toast("Sessione: " + SESSION); });
+document.getElementById("exportBtn").addEventListener("click", async () => {
+  const all = await idbGetAll("rows");
+  const rows = all.filter((r) => r.session === SESSION);
+  if (!rows.length) return toast("Nessuna carta in questa sessione");
+  const header = ["Codice", "Quantity", "Session", "ScannedAt"];
+  const csvLines = [header.join(",")].concat(rows.map((r) => [r.code, r.qty, r.session, r.updatedAt].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
+  const blob = new Blob([csvLines.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "fiera_scan_" + SESSION.replace(/[^a-z0-9]+/gi, "_") + ".csv";
+  a.click();
+  for (const r of rows) { r.exported = true; await idbPut("rows", r); }
+  renderRows();
+  toast("Esportate " + rows.length + " righe");
+});
+
+/* ---------- vista Storico: sessioni salvate in locale (mai cancellate) ---------- */
+async function renderSessions() {
+  const el = document.getElementById("sessList");
+  const all = await idbGetAll("rows");
+  const bySession = {};
+  for (const r of all) {
+    const s = bySession[r.session] || (bySession[r.session] = { n: 0, tot: 0, last: "" });
+    s.n++; s.tot += r.qty; if (r.updatedAt > s.last) s.last = r.updatedAt;
+  }
+  const list = Object.entries(bySession).sort((a, b) => b[1].last.localeCompare(a[1].last));
+  el.innerHTML = list.length ? list.map(([name, s]) => `<div class="sessItem" data-name="${name}">
+      <div><b>${name}</b><div class="l">${s.n} carte · ${s.tot} pezzi</div></div>
+      <div class="l">${new Date(s.last).toLocaleString("it-IT")}</div>
+    </div>`).join("")
+    : '<div class="empty">Nessuna sessione salvata ancora.</div>';
+  el.querySelectorAll(".sessItem").forEach((el2) => el2.addEventListener("click", () => {
+    setSession(el2.dataset.name);
+    document.querySelector('.tab[data-view="listView"]').click();
+  }));
+}
+
+/* ---------- avvio ---------- */
+(async function init() {
+  DB = await idbOpen();
+  setSession(SESSION);
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  initOcr(); // in parallelo alla fotocamera, cosi' e' pronto entro la prima cattura
+  try { await startCamera(); }
+  catch (e) { document.getElementById("camHint").textContent = "Fotocamera non disponibile: " + e.message; }
+})();
+</script>
