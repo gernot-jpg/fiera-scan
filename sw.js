@@ -1,4 +1,4 @@
-const CACHE = "fiera-scan-v14";
+const CACHE = "fiera-scan-v15";
 // Base = cartella dove vive questo sw.js (es. "/" a radice, o "/fiera-scan/" su GitHub Pages
 // project page) — calcolata dal proprio URL cosi' funziona a qualunque profondita', senza
 // dover sapere in anticipo dove verra' pubblicata l'app.
@@ -42,8 +42,12 @@ self.addEventListener("fetch", (e) => {
     return;
   }
   if (SHELL.includes(url.pathname)) {
+    // { cache: "no-store" } bypassa anche la cache HTTP del browser, non solo la Cache API:
+    // GitHub Pages manda Cache-Control con qualche minuto di validita', quindi un fetch()
+    // "normale" puo' restituire una risposta vecchia dalla cache del browser anche se il
+    // service worker sta facendo "prima la rete".
     e.respondWith(
-      fetch(e.request)
+      fetch(e.request, { cache: "no-store" })
         .then((res) => {
           if (res.ok) caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
           return res;
