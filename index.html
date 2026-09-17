@@ -486,15 +486,21 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
       manuale richiesta. */
 async function trySendRow(r) {
   const qtyToSend = r.qty - (r.sentQty || 0);
-  if (qtyToSend <= 0) return "already-sent";
+  if (qtyToSend <= 0) return { ok: true };
   try {
     await sendToSite(r.code, qtyToSend);
     r.sentQty = r.qty;
+    r.lastError = null;
     await idbPut("rows", r);
-    return "ok";
+    return { ok: true };
   } catch (e) {
+    // il sito puo' rifiutare la richiesta (formato, non trovato...) senza che sia un
+    // problema di rete: salvo il motivo vero sulla riga invece di dire genericamente
+    // "offline", cosi' si vede subito nella lista cosa e' andato storto e perche'.
+    r.lastError = e.message;
+    await idbPut("rows", r);
     sendDebug({ type: "sendError", code: r.code, message: e.message });
-    return "fail";
+    return { ok: false, error: e.message };
   }
 }
 
@@ -503,9 +509,9 @@ async function autoSendRow(session, code) {
   const rows = await idbGetAll("rows");
   const r = rows.find((x) => x.session === session && x.code === code);
   if (!r) return;
-  const outcome = await trySendRow(r);
-  if (outcome === "ok") toast("✔ Inviato al sito: " + code);
-  else if (outcome === "fail") toast("Offline: " + code + " resta in coda, invio dopo");
+  const res = await trySendRow(r);
+  if (res.ok) toast("✔ Inviato al sito: " + code);
+  else toast("Rifiutato " + code + ": " + res.error);
   if (document.getElementById("listView").classList.contains("active")) renderRows();
 }
 
@@ -518,7 +524,7 @@ async function retryPendingSends() {
     const pending = all.filter((r) => r.qty - (r.sentQty || 0) > 0);
     if (!pending.length) return;
     let ok = 0;
-    for (const r of pending) { if ((await trySendRow(r)) === "ok") ok++; }
+    for (const r of pending) { if ((await trySendRow(r)).ok) ok++; }
     if (ok) {
       toast(`✔ Inviate ${ok} carte in coda`);
       renderRows();
@@ -554,10 +560,11 @@ async function renderRows() {
   if (!rows.length) { list.innerHTML = '<div class="empty">Nessuna carta scansionata in questa sessione.</div>'; return; }
   list.innerHTML = rows.map((r) => {
     const pending = Math.max(0, r.qty - (r.sentQty || 0));
+    const errTitle = r.lastError ? ` title="${escapeHtml(r.lastError)}"` : "";
     const siteTag = pending === 0 && (r.sentQty || 0) > 0 ? '<span class="syncTag ok">✔ inviato</span>'
-      : pending > 0 ? `<span class="syncTag pending">${pending} da inviare</span>` : "";
+      : pending > 0 ? `<span class="syncTag pending"${errTitle}>${pending} da inviare${r.lastError ? " ⚠️" : ""}</span>` : "";
     return `<div class="row" data-id="${r.clientId}">
-      <div class="rInfo"><div class="rName">${escapeHtml(r.code)}</div></div>
+      <div class="rInfo"><div class="rName">${escapeHtml(r.code)}</div>${r.lastError ? `<div class="rSub" style="color:var(--bad)">${escapeHtml(r.lastError)}</div>` : ""}</div>
       <div class="rQty"><button class="rMinus" aria-label="Diminuisci quantità di ${escapeHtml(r.code)}">−</button><span class="n">${r.qty}</span><button class="rPlus" aria-label="Aumenta quantità di ${escapeHtml(r.code)}">+</button></div>
       <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
       ${siteTag}
