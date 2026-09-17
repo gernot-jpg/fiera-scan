@@ -140,7 +140,6 @@ border-radius:12px;padding:10px 12px}
     </div>
     <div class="toolbar">
       <button class="primary" id="exportBtn">📤 Esporta CSV</button>
-      <button id="siteSyncBtn">🚀 Invia al sito</button>
     </div>
     <div id="rowsList"></div>
   </div>
@@ -479,27 +478,55 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
   autoSendRow(SESSION, code); // in background, non blocca lo scanner (rete lenta/assente)
 });
 
-/* Invio automatico al sito subito dopo la conferma di ogni scansione (se il relay e'
-   configurato). Se offline o il relay non risponde, la riga resta in coda con il badge
-   "da inviare" — recuperabile in qualunque momento col bottone "Invia al sito". */
+/* Invio al sito: SEMPRE automatico, mai un bottone/conferma separati.
+   1. Subito dopo la conferma di ogni scansione (autoSendRow).
+   2. In automatico, silenziosamente, quando torna la rete o all'avvio (retryPendingSends)
+      — recupera da solo tutto quello rimasto in coda per offline/errore, nessuna azione
+      manuale richiesta. */
+async function trySendRow(r) {
+  const qtyToSend = r.qty - (r.sentQty || 0);
+  if (qtyToSend <= 0) return "already-sent";
+  try {
+    await sendToSite(r.code, qtyToSend);
+    r.sentQty = r.qty;
+    await idbPut("rows", r);
+    return "ok";
+  } catch (e) {
+    sendDebug({ type: "sendError", code: r.code, message: e.message });
+    return "fail";
+  }
+}
+
 async function autoSendRow(session, code) {
   if (!relayConfigured()) { toast("Relay non configurato: " + code + " resta solo in locale"); return; }
   const rows = await idbGetAll("rows");
   const r = rows.find((x) => x.session === session && x.code === code);
   if (!r) return;
-  const qtyToSend = r.qty - (r.sentQty || 0);
-  if (qtyToSend <= 0) return;
-  try {
-    await sendToSite(r.code, qtyToSend);
-    r.sentQty = r.qty;
-    await idbPut("rows", r);
-    toast("✔ Inviato al sito: " + code);
-  } catch (e) {
-    sendDebug({ type: "autoSendError", code, message: e.message });
-    toast("Offline: " + code + " resta in coda, invio dopo");
-  }
+  const outcome = await trySendRow(r);
+  if (outcome === "ok") toast("✔ Inviato al sito: " + code);
+  else if (outcome === "fail") toast("Offline: " + code + " resta in coda, invio dopo");
   if (document.getElementById("listView").classList.contains("active")) renderRows();
 }
+
+let retryInFlight = false;
+async function retryPendingSends() {
+  if (retryInFlight || !relayConfigured()) return;
+  retryInFlight = true;
+  try {
+    const all = await idbGetAll("rows");
+    const pending = all.filter((r) => r.qty - (r.sentQty || 0) > 0);
+    if (!pending.length) return;
+    let ok = 0;
+    for (const r of pending) { if ((await trySendRow(r)) === "ok") ok++; }
+    if (ok) {
+      toast(`✔ Inviate ${ok} carte in coda`);
+      renderRows();
+    }
+  } finally {
+    retryInFlight = false;
+  }
+}
+window.addEventListener("online", retryPendingSends);
 
 /* ---------- coda locale (righe scansionate) — solo IndexedDB, nessun server ----------
    Niente si cancella mai da solo: "exported" e' solo un flag per non riesportare due volte
@@ -580,29 +607,6 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
   toast("Esportate " + rows.length + " righe");
 });
 
-document.getElementById("siteSyncBtn").addEventListener("click", async () => {
-  if (!relayConfigured()) return toast("Relay non configurato (apri il link con ?relay=...&rtoken=...)");
-  const all = await idbGetAll("rows");
-  const pending = all.filter((r) => r.session === SESSION && r.qty - (r.sentQty || 0) > 0);
-  if (!pending.length) return toast("Niente da inviare in questa sessione");
-  if (!(await customConfirm(`Inviare ${pending.length} carte al sito? Ogni invio riuscito SCARICA per davvero lo stock reale.`))) return;
-  let ok = 0, fail = 0;
-  for (const r of pending) {
-    const qtyToSend = r.qty - (r.sentQty || 0);
-    try {
-      await sendToSite(r.code, qtyToSend);
-      r.sentQty = r.qty;
-      await idbPut("rows", r);
-      ok++;
-    } catch (e) {
-      sendDebug({ type: "siteSyncError", code: r.code, message: e.message });
-      fail++;
-    }
-    renderRows();
-  }
-  toast(`Inviate ${ok}` + (fail ? `, fallite ${fail} (riprova più tardi)` : ""));
-});
-
 /* ---------- vista Storico: sessioni salvate in locale (mai cancellate) ---------- */
 async function renderSessions() {
   const el = document.getElementById("sessList");
@@ -629,6 +633,7 @@ async function renderSessions() {
   DB = await idbOpen();
   setSession(SESSION);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if (navigator.onLine) retryPendingSends(); // recupera in automatico eventuali code rimaste da prima
   initOcr(); // in parallelo alla fotocamera, cosi' e' pronto entro la prima cattura
   try { await startCamera(); }
   catch (e) { document.getElementById("camHint").textContent = "Fotocamera non disponibile: " + e.message; }
