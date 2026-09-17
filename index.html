@@ -86,6 +86,11 @@ padding:8px 10px;margin-bottom:8px}
 .toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:#20283a;color:#fff;padding:9px 16px;
 border-radius:20px;font-size:13px;z-index:50;opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
+.modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;
+justify-content:center;z-index:100}
+.modalBox{background:var(--panel);border-radius:16px 16px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));
+width:100%;max-width:480px;box-shadow:0 -8px 30px rgba(0,0,0,.5)}
+.modalMsg{font-size:15px;margin-bottom:16px;line-height:1.4}
 .sessList{display:flex;flex-direction:column;gap:8px}
 .sessItem{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--line);
 border-radius:12px;padding:10px 12px}
@@ -154,6 +159,18 @@ border-radius:12px;padding:10px 12px}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- window.confirm() e' inerte nelle PWA standalone su iOS (bug noto di WebKit): dialogo
+     nostro, dentro l'app, per ogni conferma che serve davvero. -->
+<div class="modalOverlay" id="confirmModal" hidden>
+  <div class="modalBox">
+    <div class="modalMsg" id="confirmModalMsg"></div>
+    <div class="sheetBtns">
+      <button class="btnCancel" id="confirmModalNo">Annulla</button>
+      <button class="btnAdd" id="confirmModalYes">Conferma</button>
+    </div>
+  </div>
+</div>
 
 <script src="vendor/tesseract/tesseract.min.js"></script>
 <script>
@@ -235,6 +252,28 @@ function toast(msg) {
   el.classList.add("show");
   clearTimeout(toastT);
   toastT = setTimeout(() => el.classList.remove("show"), 1800);
+}
+
+/* Sostituisce window.confirm() (inerte nelle PWA standalone su iOS): stesso overlay per
+   ogni conferma "seria" dell'app (invio al sito, cancellazione di una riga gia' inviata). */
+function customConfirm(message) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById("confirmModal");
+    document.getElementById("confirmModalMsg").textContent = message;
+    overlay.hidden = false;
+    const yesBtn = document.getElementById("confirmModalYes");
+    const noBtn = document.getElementById("confirmModalNo");
+    const cleanup = (result) => {
+      overlay.hidden = true;
+      yesBtn.removeEventListener("click", onYes);
+      noBtn.removeEventListener("click", onNo);
+      resolve(result);
+    };
+    const onYes = () => cleanup(true);
+    const onNo = () => cleanup(false);
+    yesBtn.addEventListener("click", onYes);
+    noBtn.addEventListener("click", onNo);
+  });
 }
 
 /* ---------- tabs ---------- */
@@ -518,7 +557,7 @@ async function deleteRow(clientId) {
   // cancellare la riga NON annulla lo scarico gia' fatto sul sito reale: chiedo conferma
   // esplicita per non far perdere la traccia di un pezzo gia' scaricato per davvero.
   if (r && (r.sentQty || 0) > 0) {
-    if (!confirm(`${r.code} risulta gia' inviato al sito (${r.sentQty} pezzi). Cancellarla qui NON annulla lo scarico reale. Procedere comunque?`)) return;
+    if (!(await customConfirm(`${r.code} risulta già inviato al sito (${r.sentQty} pezzi). Cancellarla qui NON annulla lo scarico reale. Procedere comunque?`))) return;
   }
   await idbDelete("rows", clientId);
   renderRows();
@@ -546,7 +585,7 @@ document.getElementById("siteSyncBtn").addEventListener("click", async () => {
   const all = await idbGetAll("rows");
   const pending = all.filter((r) => r.session === SESSION && r.qty - (r.sentQty || 0) > 0);
   if (!pending.length) return toast("Niente da inviare in questa sessione");
-  if (!confirm(`Inviare ${pending.length} carte al sito? Ogni invio riuscito SCARICA per davvero lo stock reale.`)) return;
+  if (!(await customConfirm(`Inviare ${pending.length} carte al sito? Ogni invio riuscito SCARICA per davvero lo stock reale.`))) return;
   let ok = 0, fail = 0;
   for (const r of pending) {
     const qtyToSend = r.qty - (r.sentQty || 0);
