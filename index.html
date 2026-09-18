@@ -74,7 +74,7 @@ padding:9px 10px;font-size:14px}
 .row{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
 padding:8px 10px;margin-bottom:8px}
 .row .rInfo{flex:1;min-width:0}
-.row .rName{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .rName{font-weight:600;font-size:14px;white-space:normal;word-break:break-all}
 .row .rSub{font-size:12px;color:var(--dim)}
 .rQty{display:flex;align-items:center;gap:6px}
 .rQty button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg)}
@@ -128,7 +128,7 @@ border-radius:12px;padding:10px 12px}
       </div>
       <div class="sheetBtns">
         <button class="btnCancel" id="cfCancel">Annulla</button>
-        <button class="btnAdd" id="cfAdd">✅ Aggiungi</button>
+        <button class="btnAdd" id="cfAdd">SCARICA</button>
       </div>
     </div>
   </div>
@@ -179,6 +179,19 @@ border-radius:12px;padding:10px 12px}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Esito grande al centro schermo dopo l'invio al sito: verde+spunta se scaricata, rosso+!
+     se no. Molto piu' visibile di un toast, sparisce da solo dopo 1.5s. -->
+<div id="sendResultOverlay" hidden style="position:fixed;inset:0;z-index:200;display:flex;
+  align-items:center;justify-content:center;background:rgba(0,0,0,.55);pointer-events:none">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:16px">
+    <div id="sendResultCircle" style="width:96px;height:96px;border-radius:50%;display:flex;
+      align-items:center;justify-content:center;font-size:52px;font-weight:800;color:#fff;
+      box-shadow:0 6px 24px rgba(0,0,0,.4)"></div>
+    <div id="sendResultText" style="font-size:22px;font-weight:800;color:#fff;text-align:center;
+      text-shadow:0 2px 6px rgba(0,0,0,.7)"></div>
+  </div>
+</div>
 
 <!-- window.confirm() e' inerte nelle PWA standalone su iOS (bug noto di WebKit): dialogo
      nostro, dentro l'app, per ogni conferma che serve davvero. -->
@@ -278,6 +291,22 @@ function toast(msg, duration) {
 function updateRelayBanner() {
   const banner = document.getElementById("relayWarnBanner");
   if (banner) banner.hidden = relayConfigured();
+}
+
+/* Esito invio grande al centro schermo (verde/spunta = scaricata, rosso/! = no), 1.5s poi
+   sparisce da solo — non richiede nessuna azione, serve solo a far capire al volo cosa e'
+   successo mentre si scansiona di fretta in fiera. */
+let sendResultTimer;
+function showSendResult(ok, text) {
+  const overlay = document.getElementById("sendResultOverlay");
+  const circle = document.getElementById("sendResultCircle");
+  const label = document.getElementById("sendResultText");
+  circle.style.background = ok ? "var(--good)" : "var(--bad)";
+  circle.textContent = ok ? "✓" : "!";
+  label.textContent = text;
+  overlay.hidden = false;
+  clearTimeout(sendResultTimer);
+  sendResultTimer = setTimeout(() => { overlay.hidden = true; }, 1500);
 }
 
 /* Sostituisce window.confirm() (inerte nelle PWA standalone su iOS): stesso overlay per
@@ -598,7 +627,7 @@ async function trySendRow(r) {
 
 async function autoSendRow(session, code) {
   if (!relayConfigured()) {
-    toast("⚠️ NON SCARICATA: " + code + " resta solo sul telefono (relay non configurato — vai su Storico)", 4000);
+    showSendResult(false, "NON SCARICATA");
     updateRelayBanner();
     return;
   }
@@ -606,8 +635,8 @@ async function autoSendRow(session, code) {
   const r = rows.find((x) => x.session === session && x.code === code);
   if (!r) return;
   const res = await trySendRow(r);
-  if (res.ok) toast("✔ Inviato al sito: " + code);
-  else toast("Rifiutato " + code + ": " + res.error);
+  if (res.ok) showSendResult(true, "SCARICATA");
+  else showSendResult(false, "NON SCARICATA");
   if (document.getElementById("listView").classList.contains("active")) renderRows();
 }
 
