@@ -104,6 +104,11 @@ border-radius:12px;padding:10px 12px}
 </div>
 
 <div class="view active" id="scanView">
+  <div id="relayWarnBanner" hidden style="background:var(--bad);color:#fff;padding:10px 14px;
+    font-size:13px;line-height:1.4;text-align:center">
+    ⚠️ Non collegato al sito: le carte scansionate NON verranno scaricate, restano solo sul telefono.
+    Vai su <b>Storico</b> per inserire il codice di collegamento.
+  </div>
   <div class="camWrap">
     <video id="video" playsinline muted></video>
     <div class="guide"><div class="box"></div></div>
@@ -150,10 +155,18 @@ border-radius:12px;padding:10px 12px}
   <div class="pad">
     <div id="diagBox" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;
       padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.6;word-break:break-all;color:var(--dim)"></div>
-    <div style="display:flex;gap:6px;margin-bottom:14px">
-      <input id="relayConfigInput" placeholder="Incolla qui il link di configurazione" aria-label="Link di configurazione relay"
-        style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:9px 10px;font-size:12px">
-      <button id="relayConfigSave" class="pill">Salva</button>
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:8px">
+        <b style="color:var(--fg)">Come collegare l'app al sito</b><br>
+        1. Chiedi l'indirizzo di configurazione a chi gestisce l'app<br>
+        2. Incollalo nel campo qui sotto<br>
+        3. Tocca "Salva" — resta memorizzato per sempre su questo telefono
+      </div>
+      <div style="display:flex;gap:6px">
+        <input id="relayConfigInput" placeholder="Incolla qui l'indirizzo di configurazione" aria-label="Indirizzo di configurazione relay"
+          style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:9px 10px;font-size:12px">
+        <button id="relayConfigSave" class="pill">Salva</button>
+      </div>
     </div>
     <div class="sessList" id="sessList"></div>
   </div>
@@ -251,12 +264,20 @@ function escapeHtml(s) {
 
 /* ---------- toast ---------- */
 let toastT;
-function toast(msg) {
+function toast(msg, duration) {
   const el = document.getElementById("toast");
   el.textContent = msg;
   el.classList.add("show");
   clearTimeout(toastT);
-  toastT = setTimeout(() => el.classList.remove("show"), 1800);
+  toastT = setTimeout(() => el.classList.remove("show"), duration || 1800);
+}
+
+/* Banner rosso permanente in cima alla schermata Scansiona finche' il relay non e' configurato
+   — a differenza di un toast (sparisce in 2 secondi), resta visibile finche' non si risolve,
+   cosi' e' impossibile non accorgersi che le carte NON vengono inviate al sito. */
+function updateRelayBanner() {
+  const banner = document.getElementById("relayWarnBanner");
+  if (banner) banner.hidden = relayConfigured();
 }
 
 /* Sostituisce window.confirm() (inerte nelle PWA standalone su iOS): stesso overlay per
@@ -510,7 +531,11 @@ async function trySendRow(r) {
 }
 
 async function autoSendRow(session, code) {
-  if (!relayConfigured()) { toast("Relay non configurato: " + code + " resta solo in locale"); return; }
+  if (!relayConfigured()) {
+    toast("⚠️ NON SCARICATA: " + code + " resta solo sul telefono (relay non configurato — vai su Storico)", 4000);
+    updateRelayBanner();
+    return;
+  }
   const rows = await idbGetAll("rows");
   const r = rows.find((x) => x.session === session && x.code === code);
   if (!r) return;
@@ -655,6 +680,7 @@ document.getElementById("relayConfigSave").addEventListener("click", () => {
   localStorage.setItem("fs_relay_token", rtoken.trim());
   input.value = "";
   renderDiag();
+  updateRelayBanner();
   toast("✔ Configurazione salvata in questa app");
 });
 
@@ -683,6 +709,7 @@ async function renderSessions() {
 (async function init() {
   DB = await idbOpen();
   setSession(SESSION);
+  updateRelayBanner();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   if (navigator.onLine) retryPendingSends(); // recupera in automatico eventuali code rimaste da prima
   initOcr(); // in parallelo alla fotocamera, cosi' e' pronto entro la prima cattura
