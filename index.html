@@ -149,7 +149,12 @@ border-radius:12px;padding:10px 12px}
 <div class="view" id="sessionsView">
   <div class="pad">
     <div id="diagBox" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;
-      padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.6;word-break:break-all;color:var(--dim)"></div>
+      padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.6;word-break:break-all;color:var(--dim)"></div>
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <input id="relayConfigInput" placeholder="Incolla qui il link di configurazione" aria-label="Link di configurazione relay"
+        style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:9px 10px;font-size:12px">
+      <button id="relayConfigSave" class="pill">Salva</button>
+    </div>
     <div class="sessList" id="sessList"></div>
   </div>
 </div>
@@ -630,6 +635,27 @@ function renderDiag() {
     `Token salvato: ${relayTok ? escapeHtml(relayTok.slice(0, 6)) + "… (" + relayTok.length + " caratteri)" : "(vuoto)"}<br>` +
     `Pagina aperta con parametri: ${escapeHtml(location.search || "(nessuno)")}`;
 }
+
+/* Le app "web" installate su iOS ("Apri come app web") hanno uno storage ISOLATO da Safari:
+   la configurazione fatta via ?relay=...&rtoken=... in Safari non arriva mai all'icona
+   installata (verificato dal vivo). Questo campo permette di incollare lo stesso link
+   DIRETTAMENTE dentro l'istanza in esecuzione (Safari o icona installata, non importa),
+   scrivendo nel suo storage locale senza dipendere da nessuna condivisione tra contesti. */
+document.getElementById("relayConfigSave").addEventListener("click", () => {
+  const input = document.getElementById("relayConfigInput");
+  const raw = (input.value || "").trim();
+  if (!raw) { toast("Incolla prima il link"); return; }
+  const qIndex = raw.indexOf("?");
+  const params = new URLSearchParams(qIndex >= 0 ? raw.slice(qIndex) : raw);
+  const relay = params.get("relay");
+  const rtoken = params.get("rtoken");
+  if (!relay || !rtoken) { toast("Link incompleto: mancano relay/rtoken"); return; }
+  localStorage.setItem("fs_relay_url", relay.trim());
+  localStorage.setItem("fs_relay_token", rtoken.trim());
+  input.value = "";
+  renderDiag();
+  toast("✔ Configurazione salvata in questa app");
+});
 
 async function renderSessions() {
   renderDiag();
