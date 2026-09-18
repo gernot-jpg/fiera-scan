@@ -116,7 +116,6 @@ border-radius:12px;padding:10px 12px}
       <button class="roundBtn" id="torchBtn" title="Torcia" aria-label="Torcia">🔦</button>
     </div>
     <div class="hint" id="camHint">Allinea il numero sull'etichetta nel riquadro, poi premi 📷</div>
-    <div class="hint" id="scanDebug" style="bottom:calc(var(--tabh) + 38px);font-size:11px;opacity:.75">avvio OCR…</div>
     <button id="captureBtn" class="captureBtn" title="Leggi codice" aria-label="Leggi codice">📷</button>
     <div class="sheet" id="confirmSheet">
       <label class="ocrLabel" for="cfCode">Codice letto (correggi se serve)</label>
@@ -318,12 +317,6 @@ document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () 
 let stream, ocrWorker, ocrReady = false, scanPaused = false;
 const video = document.getElementById("video");
 
-function updateDebug() {
-  const el = document.getElementById("scanDebug");
-  if (!el) return;
-  el.textContent = `OCR ${ocrReady ? "pronto" : "in caricamento…"} · frame ${video.videoWidth}x${video.videoHeight} rs${video.readyState}`;
-}
-setInterval(updateDebug, 500);
 
 async function startCamera() {
   stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } } });
