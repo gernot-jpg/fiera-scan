@@ -504,6 +504,8 @@ function cleanCode(raw) { return raw.replace(/\s+/g, "").toUpperCase(); }
 
 // I codici hanno sempre uno di questi prefissi prima del "-" (uno per gioco).
 const KNOWN_PREFIXES = ["MTG", "PKM", "YGO", "RFT", "OP"];
+// Struttura completa attesa: uno dei prefissi noti, "-", 3 cifre, ".", 3 cifre (es. MTG-261.820).
+const CODE_PATTERN = new RegExp("^(" + KNOWN_PREFIXES.join("|") + ")-\\d{3}\\.\\d{3}$");
 
 function levenshtein(a, b) {
   const m = a.length, n = b.length;
@@ -584,12 +586,15 @@ function showConfirmSheet() {
   const input = document.getElementById("cfCode");
   input.value = pending.code;
   document.getElementById("qtyVal").textContent = pending.qty;
-  // confidenza bassa (Tesseract 0-100): la lettura potrebbe essere sbagliata, meglio
-  // ricontrollare a occhio prima di confermare invece di scoprirlo dopo l'invio al sito
+  // Due controlli indipendenti: la confidenza dichiarata da Tesseract (0-100, puo' essere
+  // ingannevole: a volte e' "sicuro" anche leggendo male) E la struttura attesa del codice
+  // (prefisso noto-NNN.NNN) — se anche uno solo fallisce, avviso forte prima di confermare.
   const label = document.querySelector('label[for="cfCode"]');
   const lowConf = typeof pending.confidence === "number" && pending.confidence < 60;
-  label.innerHTML = "Codice letto (correggi se serve)" + (lowConf ? ' <span style="color:var(--warn)">⚠️ lettura incerta, ricontrolla</span>' : "");
-  input.classList.toggle("lowConf", lowConf);
+  const badFormat = !CODE_PATTERN.test(pending.code);
+  const warnMsg = badFormat ? "⚠️ formato non riconosciuto, correggi a mano" : lowConf ? "⚠️ lettura incerta, ricontrolla" : "";
+  label.innerHTML = "Codice letto (correggi se serve)" + (warnMsg ? ` <span style="color:var(--warn)">${warnMsg}</span>` : "");
+  input.classList.toggle("lowConf", lowConf || badFormat);
   document.getElementById("confirmSheet").classList.add("show");
   input.focus();
   input.select();
