@@ -14,7 +14,7 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 -webkit-tap-highlight-color:transparent;overscroll-behavior:none}
-button{font:inherit;cursor:pointer}
+button{font:inherit;cursor:pointer;touch-action:manipulation}
 .tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--panel);border-top:1px solid var(--line);
 padding-bottom:env(safe-area-inset-bottom);z-index:20}
 .tabs button{flex:1;background:none;border:none;color:var(--dim);padding:10px 0 8px;font-size:12px;display:flex;
@@ -35,7 +35,7 @@ padding-top:calc(10px + env(safe-area-inset-top));background:var(--panel);border
 .guide .box{width:82%;max-width:440px;height:58px;border:3px solid rgba(255,255,255,.85);border-radius:10px;
 box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 .camControls{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;display:flex;gap:8px}
-.roundBtn{width:42px;height:42px;border-radius:50%;border:none;background:rgba(20,26,38,.75);color:#fff;font-size:18px;
+.roundBtn{width:44px;height:44px;border-radius:50%;border:none;background:rgba(20,26,38,.75);color:#fff;font-size:18px;
 display:flex;align-items:center;justify-content:center}
 .roundBtn.on{background:var(--accent2)}
 .captureBtn{position:absolute;left:50%;bottom:calc(var(--tabh) + 62px);transform:translateX(-50%);width:64px;height:64px;
@@ -61,8 +61,8 @@ padding:12px;font-size:20px;font-weight:700;letter-spacing:.5px;text-align:cente
 .btnCancel{background:var(--panel2);color:var(--fg)}
 .pad{padding:12px}
 .sessionBar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.sessionBar input{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;
-padding:9px 10px;font-size:14px}
+.sessionBar input{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;
+padding:11px 10px;font-size:16px}
 .pill{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:10px;padding:9px 12px;font-size:13px}
 .toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
 .toolbar button{background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:9px 12px;font-size:13px}
@@ -76,10 +76,10 @@ padding:8px 10px;margin-bottom:8px}
 .row .rInfo{flex:1;min-width:0}
 .row .rName{font-weight:600;font-size:14px;white-space:normal;word-break:break-all}
 .row .rSub{font-size:12px;color:var(--dim)}
-.rQty{display:flex;align-items:center;gap:6px}
-.rQty button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg)}
-.rQty .n{min-width:22px;text-align:center;font-weight:700}
-.rDel{background:none;border:none;color:var(--bad);font-size:18px;padding:4px 6px}
+.rQty{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.rQty button{width:36px;height:36px;flex-shrink:0;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font-size:16px}
+.rQty .n{min-width:20px;text-align:center;font-weight:700}
+.rDel{background:none;border:none;color:var(--bad);font-size:20px;padding:8px;flex-shrink:0;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center}
 .syncTag{font-size:10px;padding:2px 6px;border-radius:8px}
 .syncTag.ok{background:#123321;color:var(--good)}
 .syncTag.pending{background:#3a2f14;color:var(--warn)}
@@ -100,13 +100,13 @@ border-radius:12px;padding:10px 12px}
 .sessItem .l{font-size:12px;color:var(--dim)}
 </style>
 
-<div class="topbar">
+<div class="topbar" style="display:none">
   <h1 id="topTitle">Scansiona</h1>
 </div>
 
 <div class="view active" id="scanView">
   <div id="relayWarnBanner" hidden style="background:var(--bad);color:#fff;padding:10px 14px;
-    font-size:13px;line-height:1.4;text-align:center">
+    padding-top:calc(10px + env(safe-area-inset-top));font-size:13px;line-height:1.4;text-align:center">
     ⚠️ Non collegato al sito: le carte scansionate NON verranno scaricate, restano solo sul telefono.
     Vai su <b>Storico</b> per inserire il codice di collegamento.
   </div>
@@ -163,9 +163,9 @@ border-radius:12px;padding:10px 12px}
         3. Tocca "Salva" — resta memorizzato per sempre su questo telefono
       </div>
       <div style="display:flex;gap:6px">
-        <input id="relayConfigInput" placeholder="Incolla qui l'indirizzo di configurazione" aria-label="Indirizzo di configurazione relay"
-          style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:9px 10px;font-size:12px">
-        <button id="relayConfigSave" class="pill">Salva</button>
+        <input id="relayConfigInput" placeholder="Incolla qui l'indirizzo" aria-label="Indirizzo di configurazione relay"
+          style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:11px 10px;font-size:16px">
+        <button id="relayConfigSave" class="pill" style="min-height:44px">Salva</button>
       </div>
     </div>
     <div class="sessList" id="sessList"></div>
@@ -182,7 +182,7 @@ border-radius:12px;padding:10px 12px}
 
 <!-- Esito grande al centro schermo dopo l'invio al sito: verde+spunta se scaricata, rosso+!
      se no. Molto piu' visibile di un toast, sparisce da solo dopo 1.5s. -->
-<div id="sendResultOverlay" hidden style="position:fixed;inset:0;z-index:200;display:flex;
+<div id="sendResultOverlay" style="display:none;position:fixed;inset:0;z-index:200;
   align-items:center;justify-content:center;background:rgba(0,0,0,.55);pointer-events:none">
   <div style="display:flex;flex-direction:column;align-items:center;gap:16px">
     <div id="sendResultCircle" style="width:96px;height:96px;border-radius:50%;display:flex;
@@ -304,9 +304,11 @@ function showSendResult(ok, text) {
   circle.style.background = ok ? "var(--good)" : "var(--bad)";
   circle.textContent = ok ? "✓" : "!";
   label.textContent = text;
-  overlay.hidden = false;
+  // "hidden" NON basta: qui lo stile display e' inline, un attributo non lo vince mai
+  // (stesso tipo di bug gia' visto col modale di conferma) — display gestito solo da qui.
+  overlay.style.display = "flex";
   clearTimeout(sendResultTimer);
-  sendResultTimer = setTimeout(() => { overlay.hidden = true; }, 1500);
+  sendResultTimer = setTimeout(() => { overlay.style.display = "none"; }, 1500);
 }
 
 /* Sostituisce window.confirm() (inerte nelle PWA standalone su iOS): stesso overlay per
@@ -337,6 +339,9 @@ document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () 
   document.querySelectorAll(".view").forEach((x) => x.classList.remove("active"));
   b.classList.add("active");
   document.getElementById(b.dataset.view).classList.add("active");
+  // scanView e' fullscreen (position:fixed;inset:0): la topbar condivisa, essendo sopra di
+  // lei in z-index, altrimenti la coprirebbe in cima (banner relay, torcia) rubandole spazio.
+  document.querySelector(".topbar").style.display = b.dataset.view === "scanView" ? "none" : "flex";
   document.getElementById("topTitle").textContent = b.dataset.view === "scanView" ? "Scansiona" :
     b.dataset.view === "listView" ? "Sessione: " + SESSION : "Storico sessioni";
   if (b.dataset.view === "listView") renderRows();
