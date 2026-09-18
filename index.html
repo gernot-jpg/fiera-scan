@@ -461,6 +461,42 @@ function captureGuideCrop() {
 
 function cleanCode(raw) { return raw.replace(/\s+/g, "").toUpperCase(); }
 
+// I codici hanno sempre uno di questi prefissi prima del "-" (uno per gioco).
+const KNOWN_PREFIXES = ["MTG", "PKM", "YGO", "RFT", "OP"];
+
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/* Corregge il prefisso se l'OCR legge qualcosa di molto simile ma non esatto a uno dei
+   prefissi noti (es. "NTG"->"MTG" confondendo N/M, "0P"->"OP" confondendo 0/O) — corregge
+   solo se la distanza e' minima (1 carattere) e inequivocabile (un solo candidato migliore),
+   per non "correggere" a caso un prefisso davvero diverso. Il campo resta modificabile. */
+function correctPrefix(code) {
+  const dashIdx = code.indexOf("-");
+  if (dashIdx <= 0) return code;
+  const prefix = code.slice(0, dashIdx);
+  const rest = code.slice(dashIdx);
+  let best = null, bestDist = Infinity, ties = 0;
+  for (const known of KNOWN_PREFIXES) {
+    if (Math.abs(known.length - prefix.length) > 1) continue;
+    const d = levenshtein(prefix, known);
+    if (d < bestDist) { best = known; bestDist = d; ties = 1; }
+    else if (d === bestDist) ties++;
+  }
+  return (best && bestDist > 0 && bestDist <= 1 && ties === 1) ? best + rest : code;
+}
+
 document.getElementById("captureBtn").addEventListener("click", async () => {
   if (scanPaused) return;
   if (!ocrReady || !ocrWorker) { toast("OCR ancora in caricamento, attendi un attimo…"); return; }
@@ -479,7 +515,7 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
     sendDebug({ type: "ocrResult", raw, confidence: best.confidence });
     if (navigator.vibrate) navigator.vibrate(70);
     beep();
-    pending = { code: cleanCode(raw), qty: 1, confidence: best.confidence };
+    pending = { code: correctPrefix(cleanCode(raw)), qty: 1, confidence: best.confidence };
     showConfirmSheet();
   } catch (e) {
     sendDebug({ type: "ocrError", message: e.message });
