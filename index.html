@@ -56,16 +56,18 @@ padding:12px;font-size:20px;font-weight:700;letter-spacing:.5px;text-align:cente
 .qtyBtn{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font-size:22px}
 .qtyVal{font-size:28px;font-weight:700;min-width:52px;text-align:center}
 .sheetBtns{display:flex;gap:10px}
-.sheetBtns button{flex:1;padding:13px;border-radius:12px;border:none;font-size:15px;font-weight:600}
+.sheetBtns button{flex:1;min-height:48px;padding:13px;border-radius:12px;border:none;font-size:15px;font-weight:600}
 .btnAdd{background:var(--good);color:#08170f}
 .btnCancel{background:var(--panel2);color:var(--fg)}
 .pad{padding:12px}
 .sessionBar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .sessionBar input{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;
 padding:11px 10px;font-size:16px}
-.pill{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:10px;padding:9px 12px;font-size:13px}
+.pill{min-height:44px;display:inline-flex;align-items:center;justify-content:center;background:var(--panel2);
+border:1px solid var(--line);color:var(--dim);border-radius:10px;padding:9px 14px;font-size:14px}
 .toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.toolbar button{background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:9px 12px;font-size:13px}
+.toolbar button{min-height:44px;display:inline-flex;align-items:center;justify-content:center;background:var(--panel2);
+border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:9px 14px;font-size:14px}
 .toolbar button.primary{background:var(--accent);border-color:var(--accent)}
 .summary{display:flex;gap:10px;margin-bottom:12px}
 .sumCard{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
@@ -164,6 +166,7 @@ border-radius:12px;padding:10px 12px}
       </div>
       <div style="display:flex;gap:6px">
         <input id="relayConfigInput" placeholder="Incolla qui l'indirizzo" aria-label="Indirizzo di configurazione relay"
+          inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off"
           style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:11px 10px;font-size:16px">
         <button id="relayConfigSave" class="pill" style="min-height:44px">Salva</button>
       </div>
