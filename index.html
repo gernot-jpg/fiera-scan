@@ -51,6 +51,7 @@ transition:transform .18s ease-out;box-shadow:0 -8px 30px rgba(0,0,0,.5)}
 .codeInput{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:10px;
 padding:12px;font-size:20px;font-weight:700;letter-spacing:.5px;text-align:center}
 .codeInput:focus{outline:2px solid var(--accent2)}
+.codeInput.lowConf{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn)}
 .qtyRow{display:flex;align-items:center;justify-content:center;gap:14px;margin:16px 0}
 .qtyBtn{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font-size:22px}
 .qtyVal{font-size:28px;font-weight:700;min-width:52px;text-align:center}
@@ -403,7 +404,10 @@ function otsuThreshold(gray) {
   return thresh;
 }
 
-/* Ritaglia il riquadro guida dal frame video corrente, lo scala 3x e lo binarizza (Otsu).
+/* Ritaglia il riquadro guida dal frame video corrente, lo scala 4x (stessa risoluzione usata
+   da mtg-scanner/recognizer.py) e produce ENTRAMBE le varianti binarizzate (normale e
+   invertita) — mtg-scanner fa lo stesso per gestire sia testo scuro su sfondo chiaro sia il
+   contrario, e si sceglie il risultato con confidenza OCR piu' alta.
    Il video e' renderizzato con object-fit:cover: la mappatura tiene conto del crop/scala
    che il browser applica per riempire il riquadro con l'immagine nativa della fotocamera. */
 function captureGuideCrop() {
@@ -423,25 +427,36 @@ function captureGuideCrop() {
   const trim = bh * VERT_INSET;
   by += trim; bh -= trim * 2;
 
-  const SCALE_UP = 3;
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(bw * SCALE_UP));
-  c.height = Math.max(1, Math.round(bh * SCALE_UP));
-  const ctx = c.getContext("2d");
-  ctx.drawImage(video, bx, by, bw, bh, 0, 0, c.width, c.height);
+  const SCALE_UP = 4;
+  const w = Math.max(1, Math.round(bw * SCALE_UP)), h = Math.max(1, Math.round(bh * SCALE_UP));
+  const base = document.createElement("canvas");
+  base.width = w; base.height = h;
+  const bctx = base.getContext("2d");
+  bctx.drawImage(video, bx, by, bw, bh, 0, 0, w, h);
 
-  const imgData = ctx.getImageData(0, 0, c.width, c.height);
-  const gray = new Uint8ClampedArray(c.width * c.height);
+  const imgData = bctx.getImageData(0, 0, w, h);
+  const gray = new Uint8ClampedArray(w * h);
   for (let i = 0, p = 0; i < imgData.data.length; i += 4, p++) {
     gray[p] = (imgData.data[i] * 0.299 + imgData.data[i + 1] * 0.587 + imgData.data[i + 2] * 0.114) | 0;
   }
   const th = otsuThreshold(gray);
-  for (let i = 0, p = 0; i < imgData.data.length; i += 4, p++) {
-    const v = gray[p] > th ? 255 : 0;
-    imgData.data[i] = imgData.data[i + 1] = imgData.data[i + 2] = v;
+
+  function makeVariant(inverted) {
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const ctx = c.getContext("2d");
+    const out = ctx.createImageData(w, h);
+    for (let p = 0; p < gray.length; p++) {
+      let v = gray[p] > th ? 255 : 0;
+      if (inverted) v = 255 - v;
+      const i = p * 4;
+      out.data[i] = out.data[i + 1] = out.data[i + 2] = v;
+      out.data[i + 3] = 255;
+    }
+    ctx.putImageData(out, 0, 0);
+    return c;
   }
-  ctx.putImageData(imgData, 0, 0);
-  return c;
+  return { normal: makeVariant(false), inverted: makeVariant(true) };
 }
 
 function cleanCode(raw) { return raw.replace(/\s+/g, "").toUpperCase(); }
@@ -453,13 +468,18 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
   const btn = document.getElementById("captureBtn");
   btn.textContent = "⏳";
   try {
-    const canvas = captureGuideCrop();
-    const { data } = await ocrWorker.recognize(canvas);
-    const raw = (data.text || "").trim();
-    sendDebug({ type: "ocrResult", raw });
+    const { normal, inverted } = captureGuideCrop();
+    const [rNormal, rInverted] = await Promise.all([
+      ocrWorker.recognize(normal),
+      ocrWorker.recognize(inverted),
+    ]);
+    // tiene il risultato con confidenza OCR piu' alta tra le due varianti di contrasto
+    const best = rNormal.data.confidence >= rInverted.data.confidence ? rNormal.data : rInverted.data;
+    const raw = (best.text || "").trim();
+    sendDebug({ type: "ocrResult", raw, confidence: best.confidence });
     if (navigator.vibrate) navigator.vibrate(70);
     beep();
-    pending = { code: cleanCode(raw), qty: 1 };
+    pending = { code: cleanCode(raw), qty: 1, confidence: best.confidence };
     showConfirmSheet();
   } catch (e) {
     sendDebug({ type: "ocrError", message: e.message });
@@ -476,6 +496,12 @@ function showConfirmSheet() {
   const input = document.getElementById("cfCode");
   input.value = pending.code;
   document.getElementById("qtyVal").textContent = pending.qty;
+  // confidenza bassa (Tesseract 0-100): la lettura potrebbe essere sbagliata, meglio
+  // ricontrollare a occhio prima di confermare invece di scoprirlo dopo l'invio al sito
+  const label = document.querySelector('label[for="cfCode"]');
+  const lowConf = typeof pending.confidence === "number" && pending.confidence < 60;
+  label.innerHTML = "Codice letto (correggi se serve)" + (lowConf ? ' <span style="color:var(--warn)">⚠️ lettura incerta, ricontrolla</span>' : "");
+  input.classList.toggle("lowConf", lowConf);
   document.getElementById("confirmSheet").classList.add("show");
   input.focus();
   input.select();
