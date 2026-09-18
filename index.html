@@ -73,16 +73,20 @@ border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:9px 14px
 .sumCard{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .sumCard .v{font-size:20px;font-weight:700}
 .sumCard .l{font-size:11px;color:var(--dim)}
-.row{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
-padding:8px 10px;margin-bottom:8px}
-.row .rInfo{flex:1;min-width:0}
-.row .rName{font-weight:600;font-size:14px;white-space:normal;word-break:break-all}
+/* Il codice sta sempre su una riga propria a piena larghezza (mai in colonna stretta insieme
+   a qty/stato/elimina) — con poco spazio disponibile "word-break:break-all" andava a capo
+   lettera per lettera, illeggibile. I controlli stanno su una seconda riga sotto. */
+.row{display:flex;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+padding:10px 12px;margin-bottom:8px}
+.row .rTop{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.row .rName{flex:1;min-width:0;font-weight:600;font-size:15px;line-height:1.3;white-space:normal;overflow-wrap:break-word}
 .row .rSub{font-size:12px;color:var(--dim)}
+.rBottom{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .rQty{display:flex;align-items:center;gap:4px;flex-shrink:0}
 .rQty button{width:36px;height:36px;flex-shrink:0;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font-size:16px}
 .rQty .n{min-width:20px;text-align:center;font-weight:700}
 .rDel{background:none;border:none;color:var(--bad);font-size:20px;padding:8px;flex-shrink:0;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center}
-.syncTag{font-size:10px;padding:2px 6px;border-radius:8px}
+.syncTag{font-size:10px;padding:2px 6px;border-radius:8px;flex-shrink:0}
 .syncTag.ok{background:#123321;color:var(--good)}
 .syncTag.pending{background:#3a2f14;color:var(--warn)}
 .empty{text-align:center;color:var(--dim);padding:40px 20px}
@@ -697,11 +701,16 @@ async function renderRows() {
     const siteTag = pending === 0 && (r.sentQty || 0) > 0 ? '<span class="syncTag ok">✔ inviato</span>'
       : pending > 0 ? `<span class="syncTag pending"${errTitle}>${pending} da inviare${r.lastError ? " ⚠️" : ""}</span>` : "";
     return `<div class="row" data-id="${r.clientId}">
-      <div class="rInfo"><div class="rName">${escapeHtml(r.code)}</div>${r.lastError ? `<div class="rSub" style="color:var(--bad)">${escapeHtml(r.lastError)}</div>` : ""}</div>
-      <div class="rQty"><button class="rMinus" aria-label="Diminuisci quantità di ${escapeHtml(r.code)}">−</button><span class="n">${r.qty}</span><button class="rPlus" aria-label="Aumenta quantità di ${escapeHtml(r.code)}">+</button></div>
-      <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
-      ${siteTag}
-      <button class="rDel" aria-label="Elimina ${escapeHtml(r.code)}">✕</button>
+      <div class="rTop">
+        <div class="rName">${escapeHtml(r.code)}</div>
+        <button class="rDel" aria-label="Elimina ${escapeHtml(r.code)}">✕</button>
+      </div>
+      ${r.lastError ? `<div class="rSub" style="color:var(--bad)">${escapeHtml(r.lastError)}</div>` : ""}
+      <div class="rBottom">
+        <div class="rQty"><button class="rMinus" aria-label="Diminuisci quantità di ${escapeHtml(r.code)}">−</button><span class="n">${r.qty}</span><button class="rPlus" aria-label="Aumenta quantità di ${escapeHtml(r.code)}">+</button></div>
+        <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
+        ${siteTag}
+      </div>
     </div>`;
   }).join("");
   list.querySelectorAll(".row").forEach((el) => {
