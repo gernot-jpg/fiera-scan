@@ -497,6 +497,17 @@ function correctPrefix(code) {
   return (best && bestDist > 0 && bestDist <= 1 && ties === 1) ? best + rest : code;
 }
 
+/* Formato fisso del codice: PREFISSO-NNN.NNN (es. "MTG-261.820", sempre 3 cifre, punto,
+   3 cifre). L'OCR a volte aggiunge un carattere spurio in coda (visto dal vivo: "417J",
+   "689I" — bleed della riga sotto sull'etichetta): se il pattern atteso si riconosce
+   all'inizio, tronchiamo via tutto quello che segue invece di lasciarlo nel codice.
+   Se il pattern non combacia per niente, lasciamo il codice cosi' com'e' (l'utente corregge
+   a mano) invece di provare a indovinare cifre mancanti o in piu'. */
+function enforceCodeFormat(code) {
+  const m = code.match(/^([A-Z]+-\d{3}\.\d{3})/);
+  return m ? m[1] : code;
+}
+
 document.getElementById("captureBtn").addEventListener("click", async () => {
   if (scanPaused) return;
   if (!ocrReady || !ocrWorker) { toast("OCR ancora in caricamento, attendi un attimo…"); return; }
@@ -515,7 +526,7 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
     sendDebug({ type: "ocrResult", raw, confidence: best.confidence });
     if (navigator.vibrate) navigator.vibrate(70);
     beep();
-    pending = { code: correctPrefix(cleanCode(raw)), qty: 1, confidence: best.confidence };
+    pending = { code: enforceCodeFormat(correctPrefix(cleanCode(raw))), qty: 1, confidence: best.confidence };
     showConfirmSheet();
   } catch (e) {
     sendDebug({ type: "ocrError", message: e.message });
