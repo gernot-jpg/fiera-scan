@@ -175,6 +175,25 @@ border-radius:12px;padding:10px 12px}
         <button id="relayConfigSave" class="pill" style="min-height:44px">Salva</button>
       </div>
     </div>
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--dim);margin-bottom:8px">Nome operatore (compare nel registro di chi scansiona)</div>
+      <div style="display:flex;gap:6px">
+        <input id="operatorNameInput" placeholder="Es. Mario" aria-label="Nome operatore" autocomplete="off"
+          style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:11px 10px;font-size:16px">
+        <button id="operatorNameSave" class="pill" style="min-height:44px">Salva</button>
+      </div>
+    </div>
+    <details style="margin-bottom:14px">
+      <summary style="cursor:pointer;color:var(--dim);font-size:12px;padding:4px 0">Impostazioni avanzate</summary>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:8px">
+        <div style="font-size:12px;color:var(--dim);margin-bottom:8px" id="unlockStatus"></div>
+        <div style="display:flex;gap:6px">
+          <input id="unlockPasswordInput" type="password" placeholder="Password di sblocco" aria-label="Password di sblocco"
+            autocomplete="off" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:11px 10px;font-size:16px">
+          <button id="unlockPasswordSave" class="pill" style="min-height:44px">Sblocca</button>
+        </div>
+      </div>
+    </details>
     <div class="sessList" id="sessList"></div>
   </div>
 </div>
@@ -262,12 +281,29 @@ function setSession(name) {
    configurare l'app da solo. L'utente incolla indirizzo+token nel campo in Storico
    (vedi relayConfigSave piu' sotto), che scrive in localStorage di QUESTA istanza. */
 function relayConfigured() { return !!(localStorage.getItem("fs_relay_url") && localStorage.getItem("fs_relay_token")); }
+
+/* Finestra oraria consentita per l'invio: venerdi'/sabato/domenica, 9:00-23:00 (ora del
+   telefono). Fuori da qui l'app NON manda nulla al sito, resta tutto in coda in locale —
+   esattamente come se non ci fosse rete — a meno che non sia stata inserita la password di
+   sblocco in Storico. Il Worker verifica in modo indipendente col proprio orologio e segnala
+   nel registro ogni scarico che arriva comunque fuori da questa finestra. */
+const UNLOCK_PASSWORD = "salvaculo!";
+function isUnlocked() { return localStorage.getItem("fs_unlocked") === "1"; }
+function isAllowedNow() {
+  if (isUnlocked()) return true;
+  const now = new Date();
+  const day = now.getDay(); // 0=domenica, 5=venerdi', 6=sabato
+  const hour = now.getHours();
+  return (day === 0 || day === 5 || day === 6) && hour >= 9 && hour < 23;
+}
+
 async function sendToSite(code, quantity) {
   const base = localStorage.getItem("fs_relay_url").replace(/\/$/, "");
   const tok = localStorage.getItem("fs_relay_token");
+  const operator = localStorage.getItem("fs_operator_name") || "";
   const r = await fetch(base + "/relay/scarico?token=" + encodeURIComponent(tok), {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, quantity }),
+    body: JSON.stringify({ code, quantity, operator }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || ("http " + r.status));
@@ -310,7 +346,7 @@ function showSendResult(ok, text) {
   const label = document.getElementById("sendResultText");
   circle.style.background = ok ? "var(--good)" : "var(--bad)";
   circle.textContent = ok ? "✓" : "!";
-  label.textContent = text;
+  label.innerHTML = escapeHtml(text).replace(/\n/g, "<br>");
   // "hidden" NON basta: qui lo stile display e' inline, un attributo non lo vince mai
   // (stesso tipo di bug gia' visto col modale di conferma) — display gestito solo da qui.
   overlay.style.display = "flex";
@@ -640,6 +676,11 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
 async function trySendRow(r) {
   const qtyToSend = r.qty - (r.sentQty || 0);
   if (qtyToSend <= 0) return { ok: true };
+  if (!isAllowedNow()) {
+    // fuori dalla finestra consentita: NON si contatta nemmeno la rete, resta in coda
+    // esattamente come offline — nessuna richiesta arriva al Worker, quindi nessun log.
+    return { ok: false, queued: true, error: "fuori dalla finestra consentita (ven/sab/dom 9-23)" };
+  }
   try {
     await sendToSite(r.code, qtyToSend);
     r.sentQty = r.qty;
@@ -668,6 +709,7 @@ async function autoSendRow(session, code) {
   if (!r) return;
   const res = await trySendRow(r);
   if (res.ok) showSendResult(true, "SCARICATA");
+  else if (res.queued) showSendResult(false, "IN CODA\n(fuori orario)");
   else showSendResult(false, "NON SCARICATA");
   if (document.getElementById("listView").classList.contains("active")) renderRows();
 }
@@ -783,12 +825,23 @@ function renderDiag() {
   if (!box) return;
   const relayUrl = localStorage.getItem("fs_relay_url") || "";
   const relayTok = localStorage.getItem("fs_relay_token") || "";
+  const allowedNow = isAllowedNow();
   box.innerHTML =
     `<b>Diagnostica configurazione</b><br>` +
     `Relay configurato: <b style="color:${relayConfigured() ? "var(--good)" : "var(--bad)"}">${relayConfigured() ? "SÌ" : "NO"}</b><br>` +
     `URL relay salvato: ${escapeHtml(relayUrl || "(vuoto)")}<br>` +
     `Token salvato: ${relayTok ? escapeHtml(relayTok.slice(0, 6)) + "… (" + relayTok.length + " caratteri)" : "(vuoto)"}<br>` +
+    `Invio attivo ora: <b style="color:${allowedNow ? "var(--good)" : "var(--warn)"}">${allowedNow ? "SÌ" : "NO (fuori orario/giorno)"}</b><br>` +
     `Pagina aperta con parametri: ${escapeHtml(location.search || "(nessuno)")}`;
+
+  const opInput = document.getElementById("operatorNameInput");
+  if (opInput && document.activeElement !== opInput) opInput.value = localStorage.getItem("fs_operator_name") || "";
+  const unlockStatus = document.getElementById("unlockStatus");
+  if (unlockStatus) {
+    unlockStatus.innerHTML = isUnlocked()
+      ? '<b style="color:var(--good)">🔓 Sbloccato</b> — l\'app invia sempre, a qualsiasi ora/giorno'
+      : '🔒 Bloccato fuori da ven/sab/dom 9-23 — inserisci la password per sbloccare';
+  }
 }
 
 /* Le app "web" installate su iOS ("Apri come app web") hanno uno storage ISOLATO da Safari:
@@ -814,6 +867,27 @@ document.getElementById("relayConfigSave").addEventListener("click", () => {
   renderDiag();
   updateRelayBanner();
   toast("✔ Configurazione salvata in questa app");
+});
+
+document.getElementById("operatorNameSave").addEventListener("click", () => {
+  const input = document.getElementById("operatorNameInput");
+  const name = (input.value || "").trim();
+  if (!name) { toast("Scrivi un nome"); return; }
+  localStorage.setItem("fs_operator_name", name);
+  toast("✔ Operatore salvato: " + name);
+});
+
+document.getElementById("unlockPasswordSave").addEventListener("click", () => {
+  const input = document.getElementById("unlockPasswordInput");
+  const pwd = input.value || "";
+  input.value = "";
+  if (pwd === UNLOCK_PASSWORD) {
+    localStorage.setItem("fs_unlocked", "1");
+    renderDiag();
+    toast("🔓 Sbloccato: l'app invia sempre da questo telefono");
+  } else {
+    toast("Password errata");
+  }
 });
 
 async function renderSessions() {
