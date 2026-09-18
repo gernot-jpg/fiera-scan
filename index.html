@@ -224,12 +224,10 @@ function setSession(name) {
 
 /* ---------- relay privato per l'invio al sito ----------
    L'app pubblica non conosce mai il Bearer token vero: manda {code,quantity} a un piccolo
-   relay (Mac o altro) che aggiunge il token e inoltra a ScaricoMagFiera. URL e token del
-   relay si passano una volta via link (?relay=...&rtoken=...) e restano in localStorage,
-   stesso pattern gia' usato in ordini-trasferte/calcolo-vendite. */
-const _u = new URLSearchParams(location.search);
-if (_u.get("relay")) localStorage.setItem("fs_relay_url", _u.get("relay").trim());
-if (_u.get("rtoken")) localStorage.setItem("fs_relay_token", _u.get("rtoken").trim());
+   relay che aggiunge il token e inoltra a ScaricoMagFiera. Configurazione SOLO MANUALE,
+   mai letta da un link condiviso: un link che gira (Slack, WhatsApp...) non deve poter
+   configurare l'app da solo. L'utente incolla indirizzo+token nel campo in Storico
+   (vedi relayConfigSave piu' sotto), che scrive in localStorage di QUESTA istanza. */
 function relayConfigured() { return !!(localStorage.getItem("fs_relay_url") && localStorage.getItem("fs_relay_token")); }
 async function sendToSite(code, quantity) {
   const base = localStorage.getItem("fs_relay_url").replace(/\/$/, "");
