@@ -617,8 +617,15 @@ document.getElementById("qtyPlus").addEventListener("click", () => { if (pending
 document.getElementById("cfCancel").addEventListener("click", () => hideConfirmSheet(true));
 document.getElementById("cfAdd").addEventListener("click", async () => {
   if (!pending) return;
-  const code = (document.getElementById("cfCode").value || "").trim();
+  const code = (document.getElementById("cfCode").value || "").trim().toUpperCase();
   if (!code) { toast("Codice vuoto"); return; }
+  // Blocco duro: si scarica SOLO un codice che rispetta esattamente PREFISSO-NNN.NNN, anche
+  // se scritto o corretto a mano — niente eccezioni, la sheet resta aperta finche' non e' valido.
+  if (!CODE_PATTERN.test(code)) {
+    toast("Formato non valido: usa PREFISSO-NNN.NNN (es. MTG-261.417)", 3000);
+    document.getElementById("cfCode").classList.add("lowConf");
+    return;
+  }
   await addScan(code, pending.qty);
   toast("Aggiunto: " + code + " ×" + pending.qty);
   hideConfirmSheet(true);
