@@ -584,7 +584,6 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
 let pending = null; // { code, qty }
 function showConfirmSheet() {
   const input = document.getElementById("cfCode");
-  input.value = pending.code;
   document.getElementById("qtyVal").textContent = pending.qty;
   // Due controlli indipendenti: la confidenza dichiarata da Tesseract (0-100, puo' essere
   // ingannevole: a volte e' "sicuro" anche leggendo male) E la struttura attesa del codice
@@ -592,8 +591,17 @@ function showConfirmSheet() {
   const label = document.querySelector('label[for="cfCode"]');
   const lowConf = typeof pending.confidence === "number" && pending.confidence < 60;
   const badFormat = !CODE_PATTERN.test(pending.code);
-  const warnMsg = badFormat ? "⚠️ formato non riconosciuto, correggi a mano" : lowConf ? "⚠️ lettura incerta, ricontrolla" : "";
-  label.innerHTML = "Codice letto (correggi se serve)" + (warnMsg ? ` <span style="color:var(--warn)">${warnMsg}</span>` : "");
+  if (badFormat) {
+    // niente in pre-compilazione: mostrare una lettura palesemente sbagliata invita a
+    // confermarla senza guardare. Meglio campo vuoto, costringe a scrivere/controllare.
+    input.value = "";
+    input.placeholder = "Es. MTG-261.417";
+    label.innerHTML = 'Codice non riconosciuto — scrivilo a mano <span style="color:var(--warn)">⚠️</span>';
+  } else {
+    input.value = pending.code;
+    input.placeholder = "";
+    label.innerHTML = "Codice letto (correggi se serve)" + (lowConf ? ' <span style="color:var(--warn)">⚠️ lettura incerta, ricontrolla</span>' : "");
+  }
   input.classList.toggle("lowConf", lowConf || badFormat);
   document.getElementById("confirmSheet").classList.add("show");
   input.focus();
