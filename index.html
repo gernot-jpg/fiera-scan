@@ -635,19 +635,22 @@ function renderDiag() {
 }
 
 /* Le app "web" installate su iOS ("Apri come app web") hanno uno storage ISOLATO da Safari:
-   la configurazione fatta via ?relay=...&rtoken=... in Safari non arriva mai all'icona
-   installata (verificato dal vivo). Questo campo permette di incollare lo stesso link
-   DIRETTAMENTE dentro l'istanza in esecuzione (Safari o icona installata, non importa),
-   scrivendo nel suo storage locale senza dipendere da nessuna condivisione tra contesti. */
+   la configurazione va quindi inserita SOLO manualmente dentro l'istanza in esecuzione (mai
+   letta automaticamente da un link aperto). Accetta l'indirizzo del relay con ?rtoken=...
+   in coda (formato attuale) oppure il vecchio formato ?relay=...&rtoken=... per compatibilita'. */
 document.getElementById("relayConfigSave").addEventListener("click", () => {
   const input = document.getElementById("relayConfigInput");
   const raw = (input.value || "").trim();
-  if (!raw) { toast("Incolla prima il link"); return; }
-  const qIndex = raw.indexOf("?");
-  const params = new URLSearchParams(qIndex >= 0 ? raw.slice(qIndex) : raw);
-  const relay = params.get("relay");
-  const rtoken = params.get("rtoken");
-  if (!relay || !rtoken) { toast("Link incompleto: mancano relay/rtoken"); return; }
+  if (!raw) { toast("Incolla prima l'indirizzo"); return; }
+  let relay = null, rtoken = null;
+  try {
+    const u = new URL(raw);
+    rtoken = u.searchParams.get("rtoken");
+    relay = u.searchParams.get("relay") || (u.origin + (u.pathname !== "/" ? u.pathname : ""));
+  } catch (e) {
+    toast("Indirizzo non valido"); return;
+  }
+  if (!relay || !rtoken) { toast("Manca l'indirizzo o il token"); return; }
   localStorage.setItem("fs_relay_url", relay.trim());
   localStorage.setItem("fs_relay_token", rtoken.trim());
   input.value = "";
