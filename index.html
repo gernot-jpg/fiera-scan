@@ -148,6 +148,8 @@ border-radius:12px;padding:10px 12px}
 
 <div class="view" id="sessionsView">
   <div class="pad">
+    <div id="diagBox" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;
+      padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.6;word-break:break-all;color:var(--dim)"></div>
     <div class="sessList" id="sessList"></div>
   </div>
 </div>
@@ -616,7 +618,21 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
 });
 
 /* ---------- vista Storico: sessioni salvate in locale (mai cancellate) ---------- */
+function renderDiag() {
+  const box = document.getElementById("diagBox");
+  if (!box) return;
+  const relayUrl = localStorage.getItem("fs_relay_url") || "";
+  const relayTok = localStorage.getItem("fs_relay_token") || "";
+  box.innerHTML =
+    `<b>Diagnostica configurazione</b><br>` +
+    `Relay configurato: <b style="color:${relayConfigured() ? "var(--good)" : "var(--bad)"}">${relayConfigured() ? "SÌ" : "NO"}</b><br>` +
+    `URL relay salvato: ${escapeHtml(relayUrl || "(vuoto)")}<br>` +
+    `Token salvato: ${relayTok ? escapeHtml(relayTok.slice(0, 6)) + "… (" + relayTok.length + " caratteri)" : "(vuoto)"}<br>` +
+    `Pagina aperta con parametri: ${escapeHtml(location.search || "(nessuno)")}`;
+}
+
 async function renderSessions() {
+  renderDiag();
   const el = document.getElementById("sessList");
   const all = await idbGetAll("rows");
   const bySession = {};
