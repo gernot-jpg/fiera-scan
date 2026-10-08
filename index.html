@@ -91,7 +91,7 @@ padding:10px 12px;margin-bottom:8px}
 .syncTag.pending{background:#3a2f14;color:var(--warn)}
 .empty{text-align:center;color:var(--dim);padding:40px 20px}
 .toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:#20283a;color:#fff;padding:9px 16px;
-border-radius:20px;font-size:13px;z-index:50;opacity:0;transition:opacity .2s}
+border-radius:20px;font-size:13px;z-index:300;opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
 .modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;
 justify-content:center;z-index:100}
@@ -231,6 +231,29 @@ border-radius:12px;padding:10px 12px}
   </div>
 </div>
 
+<!-- Nome operatore obbligatorio: all'apertura, se non e' ancora salvato, blocca l'app finche'
+     non viene inserito. Niente "Annulla": si chiude solo salvando un nome. Lo stesso valore
+     compare poi in Storico > Nome operatore, dove si puo' cambiare. -->
+<div class="modalOverlay" id="nameModal" hidden style="align-items:center;z-index:150">
+  <div class="modalBox" style="border-radius:16px;margin:0 16px">
+    <div class="modalMsg"><b>Come ti chiami?</b><br>
+      <span style="font-size:13px;color:var(--dim)">Serve per sapere chi ha scansionato ogni carta. Puoi cambiarlo dopo in Storico.</span></div>
+    <input id="nameModalInput" placeholder="Es. Valery" aria-label="Nome operatore" autocomplete="off"
+      style="width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:12px 10px;font-size:16px;margin-bottom:14px">
+    <div class="sheetBtns">
+      <button class="btnAdd" id="nameModalSave">Continua</button>
+    </div>
+  </div>
+</div>
+
+<!-- Evento obbligatorio (se ce n'e' almeno uno disponibile oggi): niente "Annulla". -->
+<div class="modalOverlay" id="eventModal" hidden style="align-items:center;z-index:140">
+  <div class="modalBox" style="border-radius:16px;margin:0 16px">
+    <div class="modalMsg"><b>A quale evento partecipi?</b></div>
+    <div id="eventModalList"></div>
+  </div>
+</div>
+
 <script src="vendor/tesseract/tesseract.min.js"></script>
 <script>
 /* App 100% locale: nessun server, nessuna rete richiesta per scansionare/salvare/esportare.
@@ -272,6 +295,57 @@ function setSession(name) {
   SESSION = (name || "").trim() || todaySessionDefault();
   localStorage.setItem("fs_session", SESSION);
   document.getElementById("sessionInput").value = SESSION;
+}
+
+/* ---------- eventi selezionabili ----------
+   Ogni evento e' sceglibile da 1 giorno prima dell'inizio a 1 giorno dopo la fine (margine per
+   correzioni). Date in formato AAAA-MM-GG, ora locale del telefono. L'evento scelto diventa il
+   nome della sessione. Se oggi non c'e' nessun evento, l'app funziona come prima (sessione
+   "Fiera GG/MM/AAAA"). */
+const EVENTS = [
+  // { name: "Lucca Comics 2026", from: "2026-10-28", to: "2026-11-01" },
+];
+function localDay(iso, deltaDays) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d + deltaDays);
+}
+function availableEvents() {
+  const n = new Date();
+  const today = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  return EVENTS.filter((ev) => today >= localDay(ev.from, -1) && today <= localDay(ev.to, 1));
+}
+function isEventName(name) { return EVENTS.some((ev) => ev.name === name); }
+function applySessionLock() {
+  // Con un evento attivo il nome sessione non si modifica a mano: si cambia solo dalla lista.
+  const locked = isEventName(SESSION);
+  document.getElementById("sessionInput").readOnly = locked;
+  document.getElementById("sessSave").style.display = locked ? "none" : "";
+}
+function requireEvent() {
+  return new Promise((resolve) => {
+    const avail = availableEvents();
+    if (!avail.length) {
+      // Nessun evento oggi: se la sessione salvata era un evento ormai chiuso, torna al default.
+      if (isEventName(SESSION)) setSession(todaySessionDefault());
+      applySessionLock();
+      return resolve();
+    }
+    if (avail.some((ev) => ev.name === SESSION)) { applySessionLock(); return resolve(); }
+    const overlay = document.getElementById("eventModal");
+    const list = document.getElementById("eventModalList");
+    list.innerHTML = avail.map((ev, i) =>
+      `<button class="btnAdd" data-i="${i}" style="width:100%;min-height:52px;border:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:8px">${escapeHtml(ev.name)}</button>`).join("");
+    list.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+      const ev = avail[Number(b.dataset.i)];
+      setSession(ev.name);
+      applySessionLock();
+      overlay.hidden = true;
+      if (typeof renderRows === "function") renderRows();
+      toast("Evento: " + ev.name);
+      resolve();
+    }));
+    overlay.hidden = false;
+  });
 }
 
 /* ---------- relay privato per l'invio al sito ----------
@@ -911,10 +985,39 @@ async function renderSessions() {
   }));
 }
 
+function requireOperatorName() {
+  return new Promise((resolve) => {
+  if ((localStorage.getItem("fs_operator_name") || "").trim()) return resolve();
+  const overlay = document.getElementById("nameModal");
+  const input = document.getElementById("nameModalInput");
+  const save = () => {
+    const name = (input.value || "").trim();
+    if (!name) { toast("Scrivi il tuo nome"); input.focus(); return; }
+    localStorage.setItem("fs_operator_name", name);
+    const opInput = document.getElementById("operatorNameInput");
+    if (opInput) opInput.value = name;
+    overlay.hidden = true;
+    toast("✔ Ciao " + name);
+    resolve();
+  };
+  document.getElementById("nameModalSave").addEventListener("click", save);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") save(); });
+  overlay.hidden = false;
+  input.focus();
+  });
+}
+
 /* ---------- avvio ---------- */
 (async function init() {
-  DB = await idbOpen();
   setSession(SESSION);
+  // Prima il nome, poi l'evento: due finestre in sequenza, non sovrapposte.
+  requireOperatorName().then(requireEvent);
+  // App lasciata aperta a cavallo di un giorno: al rientro ricontrolla che l'evento sia ancora valido.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && document.getElementById("nameModal").hidden
+        && document.getElementById("eventModal").hidden) requireEvent();
+  });
+  DB = await idbOpen();
   updateRelayBanner();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   if (navigator.onLine) retryPendingSends(); // recupera in automatico eventuali code rimaste da prima
