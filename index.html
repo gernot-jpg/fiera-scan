@@ -74,7 +74,7 @@ border-radius:14px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 #scanView.photoMode .guide .box{display:none}
 #scanView.photoMode .guide .cardBox{display:block}
 #cfPhotoBlock{display:none;text-align:center}
-#cfPhotoBlock img{max-height:150px;max-width:100%;border-radius:8px;border:1px solid var(--line)}
+#cfPhotoBlock img{max-height:110px;max-width:100%;border-radius:8px;border:1px solid var(--line)}
 .sheet.photo #cfPhotoBlock{display:block}
 .sheet.photo #cfCodeBlock{display:none}
 .rThumb{width:44px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex:none}
@@ -168,7 +168,11 @@ border-radius:12px;padding:10px 12px}
         <label class="ocrLabel" for="cfCode">Codice letto (correggi se serve)</label>
         <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
       </div>
-      <div id="cfPhotoBlock"><img id="cfPhoto" alt="Foto della carta"></div>
+      <div id="cfPhotoBlock">
+        <img id="cfPhoto" alt="Foto della carta">
+        <label class="ocrLabel" for="cfPrice" style="text-align:left;margin-top:10px">Valore d'acquisto (€)</label>
+        <input id="cfPrice" class="codeInput" inputmode="decimal" placeholder="Es. 12,50" autocomplete="off">
+      </div>
       <div style="text-align:center;margin-top:10px;font-size:13px;color:var(--dim)">Pagamento: <b id="cfPay" style="color:var(--fg)"></b><span id="cfGameWrap"> · Gioco: <b id="cfGame" style="color:var(--fg)"></b></span></div>
       <div class="qtyRow">
         <button class="qtyBtn" id="qtyMinus" aria-label="Diminuisci quantità">−</button>
@@ -434,7 +438,7 @@ function captureCardPhoto() {
 }
 async function addPhotoSale(p) {
   await idbPut("rows", { clientId: uuid(), session: SESSION, kind: "photo", code: "", game: p.game, payment: p.payment,
-    photo: p.photo, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0 });
+    photo: p.photo, price: p.price, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0 });
 }
 document.getElementById("payModalClose").addEventListener("click", () => { document.getElementById("payModal").hidden = true; });
 document.getElementById("payModal").addEventListener("click", (e) => { if (e.target.id === "payModal") e.target.hidden = true; });
@@ -859,10 +863,13 @@ function showConfirmSheet() {
   if (pending.kind === "photo") {
     pending.game = GAME;
     document.getElementById("cfPhoto").src = pending.photo;
+    const price = document.getElementById("cfPrice");
+    price.value = "";
     document.getElementById("cfGame").textContent = GAME;
     document.getElementById("cfGameWrap").style.display = "";
     document.getElementById("cfAdd").textContent = "REGISTRA";
     sheet.classList.add("photo", "show");
+    price.focus();
     return;
   }
   sheet.classList.remove("photo");
@@ -901,6 +908,10 @@ document.getElementById("cfCancel").addEventListener("click", () => hideConfirmS
 document.getElementById("cfAdd").addEventListener("click", async () => {
   if (!pending) return;
   if (pending.kind === "photo") {
+    // Valore facoltativo: accetta virgola o punto, salvato come numero (null se vuoto).
+    const rawPrice = (document.getElementById("cfPrice").value || "").trim().replace(/[€\s]/g, "").replace(",", ".");
+    if (rawPrice && !/^\d+(\.\d{1,2})?$/.test(rawPrice)) { toast("Valore non valido, es. 12,50"); return; }
+    pending.price = rawPrice ? Number(rawPrice) : null;
     await addPhotoSale(pending);
     toast("Registrata: " + pending.game + " ×" + pending.qty + " · " + pending.payment);
     hideConfirmSheet(true);
@@ -1017,7 +1028,7 @@ async function renderRows() {
     if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}">
       <div class="rTop" style="gap:10px">
         <img class="rThumb" src="${escapeHtml(r.photo)}" alt="">
-        <div class="rName">Senza codice · ${escapeHtml(r.game)} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}</div>
+        <div class="rName">Senza codice · ${escapeHtml(r.game)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}</div>
         <button class="rDel" aria-label="Elimina vendita senza codice">✕</button>
       </div>
       <div class="rBottom">
@@ -1075,8 +1086,9 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
   const all = await idbGetAll("rows");
   const rows = all.filter((r) => r.session === SESSION);
   if (!rows.length) return toast("Nessuna carta in questa sessione");
-  const header = ["Codice", "Quantity", "Payment", "Game", "Tipo", "Session", "ScannedAt"];
+  const header = ["Codice", "Quantity", "Payment", "Game", "Valore", "Tipo", "Session", "ScannedAt"];
   const csvLines = [header.join(",")].concat(rows.map((r) => [r.code || "", r.qty, r.payment || "", r.game || "",
+    r.price != null ? r.price.toFixed(2) : "",
     r.kind === "photo" ? "senza codice" : "codice", r.session, r.updatedAt].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
   const blob = new Blob([csvLines.join("\n")], { type: "text/csv" });
   const a = document.createElement("a");
