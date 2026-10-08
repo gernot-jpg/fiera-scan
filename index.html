@@ -303,7 +303,13 @@ function setSession(name) {
    nome della sessione. Se oggi non c'e' nessun evento, l'app funziona come prima (sessione
    "Fiera GG/MM/AAAA"). */
 const EVENTS = [
-  // { name: "Lucca Comics 2026", from: "2026-10-28", to: "2026-11-01" },
+  { name: "Torino", from: "2026-10-10", to: "2026-10-11" },
+  { name: "Como Fun", from: "2026-10-17", to: "2026-10-18" },
+  { name: "CardPro Bologna", from: "2026-10-25", to: "2026-10-25" },
+  { name: "GardaCon", from: "2026-11-07", to: "2026-11-08" },
+  { name: "CardPro Milano", from: "2026-11-15", to: "2026-11-15" },
+  { name: "Cesena", from: "2026-11-21", to: "2026-11-22" },
+  { name: "MI GamesWeek", from: "2026-11-27", to: "2026-11-29" },
 ];
 function localDay(iso, deltaDays) {
   const [y, m, d] = iso.split("-").map(Number);
