@@ -53,6 +53,31 @@ transition:transform .18s ease-out;box-shadow:0 -8px 30px rgba(0,0,0,.5)}
 #payOpen{width:100%;max-width:440px;min-height:46px;border-radius:12px;border:1px solid rgba(255,255,255,.35);
 background:rgba(24,79,149,.45);color:#fff;font-size:16px;font-weight:700;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 #payOpen.missing{background:rgba(224,161,59,.45);border-color:rgba(224,161,59,.9)}
+.payBar{gap:8px}
+#gameOpen{display:none;flex:1;min-width:0;min-height:46px;border-radius:12px;border:1px solid rgba(255,255,255,.35);
+background:rgba(24,79,149,.45);color:#fff;font-size:15px;font-weight:700;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}
+#scanView.photoMode #gameOpen{display:block}
+#scanView.photoMode #payOpen{flex:1;min-width:0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}
+/* Freccia sul bordo, all'altezza del bottone di scatto: swipe (o tocco) per cambiare modalita'. */
+.modeArrow{position:absolute;right:0;bottom:calc(var(--tabh) + var(--payh) + 62px);width:36px;height:64px;border:none;
+border-radius:14px 0 0 14px;background:rgba(255,255,255,.18);color:rgba(255,255,255,.85);font-size:34px;line-height:1;
+display:flex;align-items:center;justify-content:center;padding:0}
+#scanView.photoMode .modeArrow{right:auto;left:0;border-radius:0 14px 14px 0}
+.modeTitle{display:none;position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;background:rgba(20,26,38,.75);
+color:#fff;font-size:14px;font-weight:700;padding:10px 14px;border-radius:22px}
+#scanView.photoMode .modeTitle{display:block}
+#relayWarnBanner:not([hidden]) ~ .camWrap .modeTitle{top:10px}
+#scanView.photoMode .guide{padding:calc(70px + env(safe-area-inset-top)) 0 calc(var(--tabh) + var(--payh) + 140px)}
+.guide .cardBox{display:none;height:100%;width:auto;max-width:80%;aspect-ratio:63/88;border:3px solid rgba(255,255,255,.85);
+border-radius:14px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
+#scanView.photoMode .guide .box{display:none}
+#scanView.photoMode .guide .cardBox{display:block}
+#cfPhotoBlock{display:none;text-align:center}
+#cfPhotoBlock img{max-height:150px;max-width:100%;border-radius:8px;border:1px solid var(--line)}
+.sheet.photo #cfPhotoBlock{display:block}
+.sheet.photo #cfCodeBlock{display:none}
+.rThumb{width:44px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex:none}
 .payOpt{width:100%;min-height:50px;margin-bottom:8px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);
 color:var(--fg);font-size:16px;font-weight:600}
 .payOpt.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
@@ -128,18 +153,23 @@ border-radius:12px;padding:10px 12px}
   </div>
   <div class="camWrap">
     <video id="video" playsinline muted></video>
-    <div class="guide"><div class="box"></div></div>
+    <div class="guide"><div class="box"></div><div class="cardBox"></div></div>
+    <div class="modeTitle">📸 Vendita senza codice</div>
     <div class="camControls">
       <button class="roundBtn" id="torchBtn" title="Torcia" aria-label="Torcia">🔦</button>
     </div>
     <div class="hint" id="camHint">Allinea il numero sull'etichetta nel riquadro, poi premi 📷</div>
     <button id="captureBtn" class="captureBtn" title="Leggi codice" aria-label="Leggi codice">📷</button>
     <!-- Tipo di pagamento: resta selezionato finche' non lo cambi, vale per ogni carta scansionata dopo. -->
-    <div class="payBar"><button id="payOpen" aria-haspopup="dialog"></button></div>
+    <button class="modeArrow" id="modeArrow" aria-label="Vendita senza codice">‹</button>
+    <div class="payBar"><button id="payOpen" aria-haspopup="dialog"></button><button id="gameOpen" aria-haspopup="dialog"></button></div>
     <div class="sheet" id="confirmSheet">
-      <label class="ocrLabel" for="cfCode">Codice letto (correggi se serve)</label>
-      <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
-      <div style="text-align:center;margin-top:10px;font-size:13px;color:var(--dim)">Pagamento: <b id="cfPay" style="color:var(--fg)"></b></div>
+      <div id="cfCodeBlock">
+        <label class="ocrLabel" for="cfCode">Codice letto (correggi se serve)</label>
+        <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      </div>
+      <div id="cfPhotoBlock"><img id="cfPhoto" alt="Foto della carta"></div>
+      <div style="text-align:center;margin-top:10px;font-size:13px;color:var(--dim)">Pagamento: <b id="cfPay" style="color:var(--fg)"></b><span id="cfGameWrap"> · Gioco: <b id="cfGame" style="color:var(--fg)"></b></span></div>
       <div class="qtyRow">
         <button class="qtyBtn" id="qtyMinus" aria-label="Diminuisci quantità">−</button>
         <div class="qtyVal" id="qtyVal">1</div>
@@ -262,8 +292,8 @@ border-radius:12px;padding:10px 12px}
 <!-- Menu tipo di pagamento (aperto dal bottone in fondo alla scansione). -->
 <div class="modalOverlay" id="payModal" hidden>
   <div class="modalBox">
-    <div class="modalMsg"><b>Tipo di pagamento</b></div>
-    <div id="payModalList" role="radiogroup" aria-label="Tipo di pagamento"></div>
+    <div class="modalMsg"><b id="payModalTitle">Tipo di pagamento</b></div>
+    <div id="payModalList" role="radiogroup" style="max-height:60vh;overflow-y:auto"></div>
     <div class="sheetBtns"><button class="btnCancel" id="payModalClose">Chiudi</button></div>
   </div>
 </div>
@@ -326,23 +356,86 @@ const PAYMENTS = ["POS", "Contanti", "PayPal", "ScalaPay", "Bonifico", "Trade"];
 let PAYMENT = PAYMENTS.includes(localStorage.getItem("fs_payment")) ? localStorage.getItem("fs_payment") : "";
 function renderPayBar() {
   const btn = document.getElementById("payOpen");
-  btn.textContent = PAYMENT ? "💳 Pagamento: " + PAYMENT : "💳 Scegli tipo di pagamento";
+  const half = typeof MODE !== "undefined" && MODE === "photo"; // bottone a meta' larghezza: testo corto
+  btn.textContent = PAYMENT ? (half ? "💳 " : "💳 Pagamento: ") + PAYMENT : (half ? "💳 Pagamento" : "💳 Scegli tipo di pagamento");
   btn.classList.toggle("missing", !PAYMENT);
 }
-function openPayMenu() {
+// Menu a scelta singola, usato sia per il pagamento sia per il gioco.
+function openChoiceMenu(title, options, current, onPick) {
   const overlay = document.getElementById("payModal");
   const list = document.getElementById("payModalList");
-  list.innerHTML = PAYMENTS.map((p) =>
-    `<button class="payOpt${p === PAYMENT ? " on" : ""}" role="radio" aria-checked="${p === PAYMENT}" data-p="${p}">${p}</button>`).join("");
+  document.getElementById("payModalTitle").textContent = title;
+  list.setAttribute("aria-label", title);
+  list.innerHTML = options.map((p, i) =>
+    `<button class="payOpt${p === current ? " on" : ""}" role="radio" aria-checked="${p === current}" data-i="${i}">${escapeHtml(p)}</button>`).join("");
   list.querySelectorAll(".payOpt").forEach((b) => b.addEventListener("click", () => {
-    PAYMENT = b.dataset.p;
-    localStorage.setItem("fs_payment", PAYMENT);
-    renderPayBar();
+    onPick(options[Number(b.dataset.i)]);
     overlay.hidden = true;
   }));
   overlay.hidden = false;
 }
+function openPayMenu() {
+  openChoiceMenu("Tipo di pagamento", PAYMENTS, PAYMENT, (p) => {
+    PAYMENT = p;
+    localStorage.setItem("fs_payment", PAYMENT);
+    renderPayBar();
+  });
+}
 document.getElementById("payOpen").addEventListener("click", openPayMenu);
+
+/* ---------- vendita senza codice ----------
+   Seconda modalita' della schermata di scansione (swipe da destra a sinistra o tocco sulla
+   freccia): invece di leggere il codice si fotografa la carta. Senza codice non si puo'
+   scaricare lo stock sul sito, quindi queste righe restano SOLO locali (Sessione + CSV). */
+const GAMES = ["Altered TCG", "Cyberpunk TCG", "Dragonball Super Fusion World", "Lorcana", "Magic The Gathering",
+  "One Piece", "Palworld TCG", "Pokémon", "Riftbound", "Yu-Gi-Oh!"];
+let GAME = GAMES.includes(localStorage.getItem("fs_game")) ? localStorage.getItem("fs_game") : "Pokémon";
+let MODE = "code"; // "code" = scansione codice etichetta, "photo" = vendita senza codice
+function renderGameBtn() { document.getElementById("gameOpen").textContent = "🎴 " + GAME; }
+document.getElementById("gameOpen").addEventListener("click", () => {
+  openChoiceMenu("Gioco", GAMES, GAME, (g) => { GAME = g; localStorage.setItem("fs_game", GAME); renderGameBtn(); });
+});
+function setMode(m) {
+  if (m === MODE || document.getElementById("confirmSheet").classList.contains("show")) return;
+  MODE = m;
+  const photo = MODE === "photo";
+  document.getElementById("scanView").classList.toggle("photoMode", photo);
+  const arrow = document.getElementById("modeArrow");
+  arrow.textContent = photo ? "›" : "‹";
+  arrow.setAttribute("aria-label", photo ? "Torna alla scansione codice" : "Vendita senza codice");
+  document.getElementById("camHint").textContent = photo
+    ? "Inquadra la carta nel riquadro, poi premi 📷"
+    : "Allinea il numero sull'etichetta nel riquadro, poi premi 📷";
+  renderPayBar();
+}
+document.getElementById("modeArrow").addEventListener("click", () => setMode(MODE === "photo" ? "code" : "photo"));
+(function initSwipe() {
+  const wrap = document.querySelector(".camWrap");
+  let sx = null, sy = 0;
+  wrap.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1 || e.target.closest(".sheet")) { sx = null; return; }
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+  }, { passive: true });
+  wrap.addEventListener("touchend", (e) => {
+    if (sx === null) return;
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    sx = null;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6) return; // non e' uno swipe orizzontale
+    setMode(dx < 0 ? "photo" : "code");
+  }, { passive: true });
+})();
+function captureCardPhoto() {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const k = Math.min(1, 900 / Math.max(vw, vh));
+  const c = document.createElement("canvas");
+  c.width = Math.round(vw * k); c.height = Math.round(vh * k);
+  c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.7);
+}
+async function addPhotoSale(p) {
+  await idbPut("rows", { clientId: uuid(), session: SESSION, kind: "photo", code: "", game: p.game, payment: p.payment,
+    photo: p.photo, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0 });
+}
 document.getElementById("payModalClose").addEventListener("click", () => { document.getElementById("payModal").hidden = true; });
 document.getElementById("payModal").addEventListener("click", (e) => { if (e.target.id === "payModal") e.target.hidden = true; });
 
@@ -718,6 +811,15 @@ function enforceCodeFormat(code) {
 
 document.getElementById("captureBtn").addEventListener("click", async () => {
   if (scanPaused) return;
+  if (MODE === "photo") {
+    if (!PAYMENT) { openPayMenu(); return; }
+    if (!video.videoWidth) { toast("Fotocamera non pronta"); return; }
+    scanPaused = true;
+    if (navigator.vibrate) navigator.vibrate(70);
+    pending = { kind: "photo", photo: captureCardPhoto(), qty: 1 };
+    showConfirmSheet();
+    return;
+  }
   if (!ocrReady || !ocrWorker) { toast("OCR ancora in caricamento, attendi un attimo…"); return; }
   if (!PAYMENT) { openPayMenu(); return; }
   scanPaused = true;
@@ -750,7 +852,22 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
 let pending = null; // { code, qty }
 function showConfirmSheet() {
   const input = document.getElementById("cfCode");
+  const sheet = document.getElementById("confirmSheet");
   document.getElementById("qtyVal").textContent = pending.qty;
+  pending.payment = PAYMENT;
+  document.getElementById("cfPay").textContent = PAYMENT;
+  if (pending.kind === "photo") {
+    pending.game = GAME;
+    document.getElementById("cfPhoto").src = pending.photo;
+    document.getElementById("cfGame").textContent = GAME;
+    document.getElementById("cfGameWrap").style.display = "";
+    document.getElementById("cfAdd").textContent = "REGISTRA";
+    sheet.classList.add("photo", "show");
+    return;
+  }
+  sheet.classList.remove("photo");
+  document.getElementById("cfGameWrap").style.display = "none";
+  document.getElementById("cfAdd").textContent = "SCARICA";
   // Due controlli indipendenti: la confidenza dichiarata da Tesseract (0-100, puo' essere
   // ingannevole: a volte e' "sicuro" anche leggendo male) E la struttura attesa del codice
   // (prefisso noto-NNN.NNN) — se anche uno solo fallisce, avviso forte prima di confermare.
@@ -769,8 +886,6 @@ function showConfirmSheet() {
     label.innerHTML = "Codice letto (correggi se serve)" + (lowConf ? ' <span style="color:var(--warn)">⚠️ lettura incerta, ricontrolla</span>' : "");
   }
   input.classList.toggle("lowConf", lowConf || badFormat);
-  pending.payment = PAYMENT;
-  document.getElementById("cfPay").textContent = PAYMENT;
   document.getElementById("confirmSheet").classList.add("show");
   input.focus();
   input.select();
@@ -785,6 +900,13 @@ document.getElementById("qtyPlus").addEventListener("click", () => { if (pending
 document.getElementById("cfCancel").addEventListener("click", () => hideConfirmSheet(true));
 document.getElementById("cfAdd").addEventListener("click", async () => {
   if (!pending) return;
+  if (pending.kind === "photo") {
+    await addPhotoSale(pending);
+    toast("Registrata: " + pending.game + " ×" + pending.qty + " · " + pending.payment);
+    hideConfirmSheet(true);
+    showSendResult(true, "REGISTRATA");
+    return;
+  }
   const code = (document.getElementById("cfCode").value || "").trim().toUpperCase();
   if (!code) { toast("Codice vuoto"); return; }
   // Blocco duro: si scarica SOLO un codice che rispetta esattamente PREFISSO-NNN.NNN, anche
@@ -807,6 +929,7 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
       — recupera da solo tutto quello rimasto in coda per offline/errore, nessuna azione
       manuale richiesta. */
 async function trySendRow(r) {
+  if (r.kind === "photo") return { ok: true }; // vendita senza codice: mai inviata al sito
   const qtyToSend = r.qty - (r.sentQty || 0);
   if (qtyToSend <= 0) return { ok: true };
   if (!isAllowedNow()) {
@@ -853,7 +976,7 @@ async function retryPendingSends() {
   retryInFlight = true;
   try {
     const all = await idbGetAll("rows");
-    const pending = all.filter((r) => r.qty - (r.sentQty || 0) > 0);
+    const pending = all.filter((r) => r.kind !== "photo" && r.qty - (r.sentQty || 0) > 0);
     if (!pending.length) return;
     let ok = 0;
     for (const r of pending) { if ((await trySendRow(r)).ok) ok++; }
@@ -891,6 +1014,18 @@ async function renderRows() {
   document.getElementById("sumQty").textContent = rows.reduce((s, r) => s + r.qty, 0);
   if (!rows.length) { list.innerHTML = '<div class="empty">Nessuna carta scansionata in questa sessione.</div>'; return; }
   list.innerHTML = rows.map((r) => {
+    if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}">
+      <div class="rTop" style="gap:10px">
+        <img class="rThumb" src="${escapeHtml(r.photo)}" alt="">
+        <div class="rName">Senza codice · ${escapeHtml(r.game)} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}</div>
+        <button class="rDel" aria-label="Elimina vendita senza codice">✕</button>
+      </div>
+      <div class="rBottom">
+        <div class="rQty"><button class="rMinus" aria-label="Diminuisci quantità">−</button><span class="n">${r.qty}</span><button class="rPlus" aria-label="Aumenta quantità">+</button></div>
+        <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
+        <span class="syncTag">solo locale</span>
+      </div>
+    </div>`;
     const pending = Math.max(0, r.qty - (r.sentQty || 0));
     const errTitle = r.lastError ? ` title="${escapeHtml(r.lastError)}"` : "";
     const siteTag = pending === 0 && (r.sentQty || 0) > 0 ? '<span class="syncTag ok">✔ inviato</span>'
@@ -940,8 +1075,9 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
   const all = await idbGetAll("rows");
   const rows = all.filter((r) => r.session === SESSION);
   if (!rows.length) return toast("Nessuna carta in questa sessione");
-  const header = ["Codice", "Quantity", "Payment", "Session", "ScannedAt"];
-  const csvLines = [header.join(",")].concat(rows.map((r) => [r.code, r.qty, r.payment || "", r.session, r.updatedAt].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
+  const header = ["Codice", "Quantity", "Payment", "Game", "Tipo", "Session", "ScannedAt"];
+  const csvLines = [header.join(",")].concat(rows.map((r) => [r.code || "", r.qty, r.payment || "", r.game || "",
+    r.kind === "photo" ? "senza codice" : "codice", r.session, r.updatedAt].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
   const blob = new Blob([csvLines.join("\n")], { type: "text/csv" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -1070,6 +1206,7 @@ function requireOperatorName() {
 (async function init() {
   setSession(SESSION);
   renderPayBar();
+  renderGameBtn();
   // Prima il nome, poi l'evento: due finestre in sequenza, non sovrapposte.
   requireOperatorName().then(requireEvent);
   // App lasciata aperta a cavallo di un giorno: al rientro ricontrolla che l'evento sia ancora valido.
