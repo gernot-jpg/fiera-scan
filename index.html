@@ -908,10 +908,12 @@ document.getElementById("cfCancel").addEventListener("click", () => hideConfirmS
 document.getElementById("cfAdd").addEventListener("click", async () => {
   if (!pending) return;
   if (pending.kind === "photo") {
-    // Valore facoltativo: accetta virgola o punto, salvato come numero (null se vuoto).
+    // Accetta virgola o punto, salvato come numero.
     const rawPrice = (document.getElementById("cfPrice").value || "").trim().replace(/[€\s]/g, "").replace(",", ".");
-    if (rawPrice && !/^\d+(\.\d{1,2})?$/.test(rawPrice)) { toast("Valore non valido, es. 12,50"); return; }
-    pending.price = rawPrice ? Number(rawPrice) : null;
+    // Obbligatorio (anche solo 0). Salvato cosi' com'e' scritto, a prescindere dalla quantita'.
+    if (!rawPrice) { toast("Scrivi il valore d'acquisto (anche 0)"); document.getElementById("cfPrice").focus(); return; }
+    if (!/^\d+(\.\d{1,2})?$/.test(rawPrice)) { toast("Valore non valido, es. 12,50"); return; }
+    pending.price = Number(rawPrice);
     await addPhotoSale(pending);
     toast("Registrata: " + pending.game + " ×" + pending.qty + " · " + pending.payment);
     hideConfirmSheet(true);
