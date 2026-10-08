@@ -43,7 +43,7 @@ border-radius:50%;border:4px solid rgba(255,255,255,.9);background:rgba(20,26,38
 display:flex;align-items:center;justify-content:center}
 .captureBtn:active{background:var(--accent2)}
 .hint{position:absolute;bottom:calc(var(--tabh) + var(--payh) + 14px);left:0;right:0;text-align:center;color:#dfe6f2;font-size:13px;text-shadow:0 1px 3px #000}
-.sheet{position:absolute;left:0;right:0;bottom:var(--tabh);background:var(--panel);border-top:1px solid var(--line);
+.sheet{position:absolute;left:0;right:0;bottom:max(var(--tabh), var(--kb, 0px));background:var(--panel);border-top:1px solid var(--line);
 border-radius:16px 16px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom));transform:translateY(105%);
 transition:transform .18s ease-out;box-shadow:0 -8px 30px rgba(0,0,0,.5)}
 .sheet.show{transform:translateY(0)}
@@ -75,6 +75,7 @@ border-radius:14px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 #scanView.photoMode .guide .cardBox{display:block}
 #cfPhotoBlock{display:none;text-align:center}
 #cfPhotoBlock img{max-height:110px;max-width:100%;border-radius:8px;border:1px solid var(--line)}
+html.kbOpen #cfPhotoBlock img{max-height:56px}
 .sheet.photo #cfPhotoBlock{display:block}
 .sheet.photo #cfCodeBlock{display:none}
 #cfPriceBlock{display:none}
@@ -879,7 +880,7 @@ function showConfirmSheet() {
     document.getElementById("cfAdd").textContent = "REGISTRA";
     sheet.classList.remove("price");
     sheet.classList.add("photo", "show");
-    price.focus();
+    price.focus({ preventScroll: true });
     return;
   }
   sheet.classList.remove("photo", "price");
@@ -955,7 +956,7 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
     const priceEl = document.getElementById("cfPrice");
     priceEl.value = "";
     document.getElementById("confirmSheet").classList.add("price");
-    priceEl.focus();
+    priceEl.focus({ preventScroll: true });
     return;
   }
   const price = readPriceInput("prezzo di vendita");
@@ -1242,6 +1243,25 @@ function requireOperatorName() {
   input.focus();
   });
 }
+
+/* ---------- tastiera: schermata ferma ----------
+   Su iOS (e Chrome Android) aprendo la tastiera il browser fa scorrere in su tutta la pagina
+   per mostrare il campo. Qui si annulla lo scorrimento riportando la schermata di scansione
+   in cima al viewport visibile, e si alza SOLO il pannello di conferma fino a sopra la
+   tastiera (--kb = altezza tastiera), cosi' camera/bottoni restano fermi. */
+(function pinOnKeyboard() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const scanView = document.getElementById("scanView");
+  const sync = () => {
+    const kb = Math.max(0, Math.round(window.innerHeight - vv.height));
+    document.documentElement.style.setProperty("--kb", kb > 80 ? kb + "px" : "0px");
+    document.documentElement.classList.toggle("kbOpen", kb > 80); // foto piu' piccola: piu' spazio sopra la tastiera
+    scanView.style.transform = vv.offsetTop > 0 ? `translateY(${Math.round(vv.offsetTop)}px)` : "";
+  };
+  vv.addEventListener("resize", sync);
+  vv.addEventListener("scroll", sync);
+})();
 
 /* ---------- avvio ---------- */
 (async function init() {
