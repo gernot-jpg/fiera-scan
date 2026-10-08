@@ -365,7 +365,7 @@ function setSession(name) {
 /* ---------- tipo di pagamento ----------
    Per ora solo locale (riga + CSV), non viene inviato al relay/sito. Una riga = stesso codice
    + stesso pagamento: la stessa carta venduta con due pagamenti diversi resta su due righe. */
-const PAYMENTS = ["POS", "Contanti", "PayPal", "ScalaPay", "Bonifico", "Trade"];
+const PAYMENTS = ["POS", "Contanti", "PayPal", "ScalaPay", "Bonifico"];
 let PAYMENT = PAYMENTS.includes(localStorage.getItem("fs_payment")) ? localStorage.getItem("fs_payment") : "";
 function renderPayBar() {
   const btn = document.getElementById("payOpen");
