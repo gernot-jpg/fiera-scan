@@ -366,6 +366,11 @@ function setSession(name) {
    Per ora solo locale (riga + CSV), non viene inviato al relay/sito. Una riga = stesso codice
    + stesso pagamento: la stessa carta venduta con due pagamenti diversi resta su due righe. */
 const PAYMENTS = ["POS", "Contanti", "PayPal", "ScalaPay", "Bonifico"];
+// Codice numerico di ciascun pagamento per ScaricoMagFiera (paymentType), dal programmatore.
+const PAYMENT_TYPE_IDS = { "Contanti": 1, "Bonifico": 2, "ScalaPay": 3, "POS": 4, "PayPal": 5 };
+// Vendite senza codice: si inviano al sito (code "0") solo quando il formato nuovo e' attivo
+// sul relay. Fino ad allora restano in coda sul telefono e partono da sole dopo il cambio.
+const SEND_PHOTO_SALES = false;
 let PAYMENT = PAYMENTS.includes(localStorage.getItem("fs_payment")) ? localStorage.getItem("fs_payment") : "";
 function renderPayBar() {
   const btn = document.getElementById("payOpen");
@@ -446,26 +451,49 @@ function captureCardPhoto() {
   return c.toDataURL("image/jpeg", 0.7);
 }
 async function addPhotoSale(p) {
-  await idbPut("rows", { clientId: uuid(), session: SESSION, kind: "photo", code: "", game: p.game, payment: p.payment,
+  await idbPut("rows", { clientId: uuid(), session: SESSION, eventId: currentEventId(), kind: "photo", code: "", game: p.game, payment: p.payment,
     photo: p.photo, price: p.price, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0 });
 }
 document.getElementById("payModalClose").addEventListener("click", () => { document.getElementById("payModal").hidden = true; });
 document.getElementById("payModal").addEventListener("click", (e) => { if (e.target.id === "payModal") e.target.hidden = true; });
 
 /* ---------- eventi selezionabili ----------
-   Ogni evento e' sceglibile da 1 giorno prima dell'inizio a 1 giorno dopo la fine (margine per
-   correzioni). Date in formato AAAA-MM-GG, ora locale del telefono. L'evento scelto diventa il
-   nome della sessione. Se oggi non c'e' nessun evento, l'app funziona come prima (sessione
-   "Fiera GG/MM/AAAA"). */
-const EVENTS = [
-  { name: "Torino 2026", from: "2026-10-10", to: "2026-10-11" },
-  { name: "Como Fun 2026", from: "2026-10-17", to: "2026-10-18" },
-  { name: "CardPro Bologna 2026", from: "2026-10-25", to: "2026-10-25" },
-  { name: "GardaCon 2026", from: "2026-11-07", to: "2026-11-08" },
-  { name: "CardPro Milano 2026", from: "2026-11-15", to: "2026-11-15" },
-  { name: "Cesena 2026", from: "2026-11-21", to: "2026-11-22" },
-  { name: "MI GamesWeek 2026", from: "2026-11-27", to: "2026-11-29" },
-];
+   La lista arriva dal sito (ListaEventi, via relay /relay/eventi) ed e' salvata sul telefono,
+   cosi' in fiera funziona anche senza rete. Ogni evento ha una data: e' sceglibile da 2 giorni
+   prima a 2 giorni dopo (ora locale del telefono). L'evento scelto diventa il nome della
+   sessione e il suo id viene mandato con ogni scarico. Se oggi non c'e' nessun evento, l'app
+   funziona come prima (sessione "Fiera GG/MM/AAAA"). */
+const EVENT_MARGIN_DAYS = 2;
+function eventSessionName(name, date) {
+  // anno nel nome sessione: lo stesso evento l'anno dopo non finisce nella stessa sessione
+  const year = date.slice(0, 4);
+  return name.includes(year) ? name : name + " " + year;
+}
+function loadCachedEvents() {
+  try {
+    const list = JSON.parse(localStorage.getItem("fs_events") || "[]");
+    return list.map((e) => ({ id: e.id, date: e.date, name: eventSessionName(e.name, e.date) }));
+  } catch (e) { return []; }
+}
+let EVENTS = loadCachedEvents();
+async function refreshEvents() {
+  if (!relayConfigured() || !navigator.onLine) return;
+  try {
+    const base = localStorage.getItem("fs_relay_url").replace(/\/$/, "");
+    const tok = localStorage.getItem("fs_relay_token");
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000); // rete lenta in fiera: non bloccare l'avvio
+    const r = await fetch(base + "/relay/eventi?token=" + encodeURIComponent(tok), { signal: ctrl.signal, cache: "no-store" });
+    clearTimeout(t);
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!Array.isArray(data.events)) return;
+    localStorage.setItem("fs_events", JSON.stringify(data.events));
+    EVENTS = loadCachedEvents();
+  } catch (e) {
+    sendDebug({ type: "eventsError", message: e.message }); // resta la lista salvata
+  }
+}
 function localDay(iso, deltaDays) {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d + deltaDays);
@@ -473,7 +501,15 @@ function localDay(iso, deltaDays) {
 function availableEvents() {
   const n = new Date();
   const today = new Date(n.getFullYear(), n.getMonth(), n.getDate());
-  return EVENTS.filter((ev) => today >= localDay(ev.from, -1) && today <= localDay(ev.to, 1));
+  const seen = new Set();
+  return EVENTS.filter((ev) => today >= localDay(ev.date, -EVENT_MARGIN_DAYS) && today <= localDay(ev.date, EVENT_MARGIN_DAYS))
+    .filter((ev) => !seen.has(ev.id) && seen.add(ev.id)); // stesso evento su piu' date: una voce sola
+}
+function currentEventId() {
+  try {
+    const ev = JSON.parse(localStorage.getItem("fs_event") || "null");
+    return ev && ev.name === SESSION ? ev.id : null;
+  } catch (e) { return null; }
 }
 function isEventName(name) { return EVENTS.some((ev) => ev.name === name); }
 function applySessionLock() {
@@ -498,6 +534,7 @@ function requireEvent() {
       `<button class="btnAdd" data-i="${i}" style="width:100%;min-height:52px;border:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:8px">${escapeHtml(ev.name)}</button>`).join("");
     list.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
       const ev = avail[Number(b.dataset.i)];
+      localStorage.setItem("fs_event", JSON.stringify({ id: ev.id, name: ev.name }));
       setSession(ev.name);
       applySessionLock();
       overlay.hidden = true;
@@ -532,13 +569,20 @@ function isAllowedNow() {
   return (day === 0 || day === 5 || day === 6) && hour >= 9 && hour < 23;
 }
 
-async function sendToSite(code, quantity, price) {
+async function sendToSite(row, quantity) {
   const base = localStorage.getItem("fs_relay_url").replace(/\/$/, "");
   const tok = localStorage.getItem("fs_relay_token");
   const operator = localStorage.getItem("fs_operator_name") || "";
   const r = await fetch(base + "/relay/scarico?token=" + encodeURIComponent(tok), {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, quantity, operator, price }),
+    body: JSON.stringify({
+      idEvento: row.eventId ?? null,
+      code: row.kind === "photo" ? "0" : row.code,
+      quantity,
+      price: row.price ?? null, // prezzo del singolo pezzo
+      paymentType: PAYMENT_TYPE_IDS[row.payment] ?? null,
+      operator,
+    }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || ("http " + r.status));
@@ -874,7 +918,7 @@ function showConfirmSheet() {
     document.getElementById("cfPhoto").src = pending.photo;
     const price = document.getElementById("cfPrice");
     price.value = "";
-    document.getElementById("cfPriceLabel").textContent = "Valore d'acquisto (€)";
+    document.getElementById("cfPriceLabel").textContent = "Valore d'acquisto (€ al pezzo)";
     document.getElementById("cfGame").textContent = GAME;
     document.getElementById("cfGameWrap").style.display = "";
     document.getElementById("cfAdd").textContent = "REGISTRA";
@@ -917,8 +961,7 @@ function hideConfirmSheet(resume) {
 document.getElementById("qtyMinus").addEventListener("click", () => { if (pending && pending.qty > 1) { pending.qty--; document.getElementById("qtyVal").textContent = pending.qty; } });
 document.getElementById("qtyPlus").addEventListener("click", () => { if (pending) { pending.qty++; document.getElementById("qtyVal").textContent = pending.qty; } });
 document.getElementById("cfCancel").addEventListener("click", () => hideConfirmSheet(true));
-// Prezzo obbligatorio (anche solo 0), virgola o punto. Salvato cosi' com'e' scritto, a
-// prescindere dalla quantita'. Ritorna il numero, oppure null (e avvisa) se manca/non valido.
+// Prezzo obbligatorio (anche solo 0), virgola o punto. E' il prezzo del SINGOLO pezzo. Ritorna il numero, oppure null (e avvisa) se manca/non valido.
 function readPriceInput(what) {
   const el = document.getElementById("cfPrice");
   const raw = (el.value || "").trim().replace(/[€\s]/g, "").replace(",", ".");
@@ -952,7 +995,7 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
     pending.code = code;
     pending.step = 2;
     document.getElementById("cfCodeShow").textContent = code;
-    document.getElementById("cfPriceLabel").textContent = "Prezzo di vendita (€)";
+    document.getElementById("cfPriceLabel").textContent = "Prezzo di vendita (€ al pezzo)";
     const priceEl = document.getElementById("cfPrice");
     priceEl.value = "";
     document.getElementById("confirmSheet").classList.add("price");
@@ -974,7 +1017,7 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
       — recupera da solo tutto quello rimasto in coda per offline/errore, nessuna azione
       manuale richiesta. */
 async function trySendRow(r) {
-  if (r.kind === "photo") return { ok: true }; // vendita senza codice: mai inviata al sito
+  if (r.kind === "photo" && !SEND_PHOTO_SALES) return { ok: true }; // non ancora attiva sul sito: resta in coda
   const qtyToSend = r.qty - (r.sentQty || 0);
   if (qtyToSend <= 0) return { ok: true };
   if (!isAllowedNow()) {
@@ -983,7 +1026,7 @@ async function trySendRow(r) {
     return { ok: false, queued: true, error: "fuori dalla finestra consentita (ven/sab/dom 9-23)" };
   }
   try {
-    await sendToSite(r.code, qtyToSend, r.price ?? null);
+    await sendToSite(r, qtyToSend);
     r.sentQty = r.qty;
     r.lastError = null;
     await idbPut("rows", r);
@@ -1020,7 +1063,7 @@ async function retryPendingSends() {
   retryInFlight = true;
   try {
     const all = await idbGetAll("rows");
-    const pending = all.filter((r) => r.kind !== "photo" && r.qty - (r.sentQty || 0) > 0);
+    const pending = all.filter((r) => (r.kind !== "photo" || SEND_PHOTO_SALES) && r.qty - (r.sentQty || 0) > 0);
     if (!pending.length) return;
     let ok = 0;
     for (const r of pending) { if ((await trySendRow(r)).ok) ok++; }
@@ -1041,7 +1084,7 @@ async function addScan(code, qty, payment, price) {
   // Ogni SCARICA e' una vendita a se' (con il suo prezzo): sempre una riga nuova, mai sommata.
   // sentQty = quanto della riga e' gia' stato inviato al sito: si manda solo la differenza
   // (anche dopo +/- in Sessione), mai due volte lo stesso pezzo.
-  const row = { clientId: uuid(), session: SESSION, code, payment, price, qty, updatedAt: nowIso(), exported: false, sentQty: 0 };
+  const row = { clientId: uuid(), session: SESSION, eventId: currentEventId(), code, payment, price, qty, updatedAt: nowIso(), exported: false, sentQty: 0 };
   await idbPut("rows", row);
   return row;
 }
@@ -1269,11 +1312,11 @@ function requireOperatorName() {
   renderPayBar();
   renderGameBtn();
   // Prima il nome, poi l'evento: due finestre in sequenza, non sovrapposte.
-  requireOperatorName().then(requireEvent);
+  requireOperatorName().then(refreshEvents).then(requireEvent);
   // App lasciata aperta a cavallo di un giorno: al rientro ricontrolla che l'evento sia ancora valido.
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && document.getElementById("nameModal").hidden
-        && document.getElementById("eventModal").hidden) requireEvent();
+        && document.getElementById("eventModal").hidden) refreshEvents().then(requireEvent);
   });
   DB = await idbOpen();
   updateRelayBanner();
