@@ -463,10 +463,10 @@ document.getElementById("payModal").addEventListener("click", (e) => { if (e.tar
 /* ---------- eventi selezionabili ----------
    La lista arriva dal sito (ListaEventi, via relay /relay/eventi) ed e' salvata sul telefono,
    cosi' in fiera funziona anche senza rete. Ogni evento ha una data: e' sceglibile da 2 giorni
-   prima a 2 giorni dopo (ora locale del telefono). L'evento scelto diventa il nome della
+   prima fino al giorno stesso, dopo la data non piu' (ora locale del telefono). L'evento scelto diventa il nome della
    sessione e il suo id viene mandato con ogni scarico. Se oggi non c'e' nessun evento, l'app
    funziona come prima (sessione "Fiera GG/MM/AAAA"). */
-const EVENT_MARGIN_DAYS = 2;
+const EVENT_DAYS_BEFORE = 2; // sceglibile da 2 giorni prima; dopo la data non piu'
 function eventSessionName(name, date) {
   // anno nel nome sessione: lo stesso evento l'anno dopo non finisce nella stessa sessione
   const year = date.slice(0, 4);
@@ -505,7 +505,7 @@ function availableEvents() {
   const n = new Date();
   const today = new Date(n.getFullYear(), n.getMonth(), n.getDate());
   const seen = new Set();
-  return EVENTS.filter((ev) => today >= localDay(ev.date, -EVENT_MARGIN_DAYS) && today <= localDay(ev.date, EVENT_MARGIN_DAYS))
+  return EVENTS.filter((ev) => today >= localDay(ev.date, -EVENT_DAYS_BEFORE) && today <= localDay(ev.date, 0))
     .filter((ev) => !seen.has(ev.id) && seen.add(ev.id)); // stesso evento su piu' date: una voce sola
 }
 function currentEventId() {
@@ -534,7 +534,7 @@ function requireEvent() {
     const overlay = document.getElementById("eventModal");
     const list = document.getElementById("eventModalList");
     list.innerHTML = avail.map((ev, i) =>
-      `<button class="btnAdd" data-i="${i}" style="width:100%;min-height:52px;border:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:8px">${escapeHtml(ev.name)}</button>`).join("");
+      `<button class="btnAdd" data-i="${i}" style="width:100%;min-height:52px;border:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:8px;line-height:1.25">${escapeHtml(ev.name)}<br><span style="font-size:13px;font-weight:500">${escapeHtml(localDay(ev.date, 0).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</span></button>`).join("");
     list.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
       const ev = avail[Number(b.dataset.i)];
       localStorage.setItem("fs_event", JSON.stringify({ id: ev.id, name: ev.name }));
