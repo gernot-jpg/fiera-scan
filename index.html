@@ -155,7 +155,7 @@ border-radius:12px;padding:10px 12px}
   <div id="relayWarnBanner" hidden style="background:var(--bad);color:#fff;padding:10px 14px;
     padding-top:calc(10px + env(safe-area-inset-top));font-size:13px;line-height:1.4;text-align:center">
     ⚠️ Non collegato al sito: le carte scansionate NON verranno scaricate, restano solo sul telefono.
-    Vai su <b>Storico</b> per inserire il codice di collegamento.
+    Vai su <b>Advanced</b> per inserire il codice di collegamento.
   </div>
   <div class="camWrap">
     <video id="video" playsinline muted></video>
@@ -215,6 +215,14 @@ border-radius:12px;padding:10px 12px}
 
 <div class="view" id="sessionsView">
   <div class="pad">
+    <!-- Evento attuale: con piu' eventi in contemporanea si cambia da qui. -->
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--dim);margin-bottom:6px">Evento</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="eventCurrent" style="flex:1;min-width:0;font-weight:600"></div>
+        <button id="eventChange" class="pill" style="min-height:44px">Cambia evento</button>
+      </div>
+    </div>
     <div id="diagBox" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;
       padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.6;word-break:break-all;color:var(--dim)"></div>
     <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px">
@@ -257,7 +265,7 @@ border-radius:12px;padding:10px 12px}
 <div class="tabs">
   <button class="tab active" data-view="scanView"><span class="ic">📷</span>Scansiona</button>
   <button class="tab" data-view="listView"><span class="ic">🗂️</span>Sessione</button>
-  <button class="tab" data-view="sessionsView"><span class="ic">📋</span>Storico</button>
+  <button class="tab" data-view="sessionsView"><span class="ic">📋</span>Advanced</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -289,11 +297,11 @@ border-radius:12px;padding:10px 12px}
 
 <!-- Nome operatore obbligatorio: all'apertura, se non e' ancora salvato, blocca l'app finche'
      non viene inserito. Niente "Annulla": si chiude solo salvando un nome. Lo stesso valore
-     compare poi in Storico > Nome operatore, dove si puo' cambiare. -->
+     compare poi in Advanced > Nome operatore, dove si puo' cambiare. -->
 <div class="modalOverlay" id="nameModal" hidden style="align-items:center;z-index:150">
   <div class="modalBox" style="border-radius:16px;margin:0 16px">
     <div class="modalMsg"><b>Come ti chiami?</b><br>
-      <span style="font-size:13px;color:var(--dim)">Serve per sapere chi ha scansionato ogni carta. Puoi cambiarlo dopo in Storico.</span></div>
+      <span style="font-size:13px;color:var(--dim)">Serve per sapere chi ha scansionato ogni carta. Puoi cambiarlo dopo in Advanced.</span></div>
     <input id="nameModalInput" placeholder="Es. Valery" aria-label="Nome operatore" autocomplete="off"
       style="width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:12px 10px;font-size:16px;margin-bottom:14px">
     <div class="sheetBtns">
@@ -316,6 +324,7 @@ border-radius:12px;padding:10px 12px}
   <div class="modalBox" style="border-radius:16px;margin:0 16px">
     <div class="modalMsg"><b>A quale evento partecipi?</b></div>
     <div id="eventModalList"></div>
+    <div class="sheetBtns" id="eventModalCancelWrap" hidden><button class="btnCancel" id="eventModalCancel">Annulla</button></div>
   </div>
 </div>
 
@@ -525,20 +534,25 @@ function applySessionLock() {
   document.getElementById("sessionInput").readOnly = locked;
   document.getElementById("sessSave").style.display = locked ? "none" : "";
 }
-function requireEvent() {
+// change=true: aperta da Advanced > Cambia evento (si puo' annullare, mostra sempre la lista).
+function requireEvent(change) {
   return new Promise((resolve) => {
     const avail = availableEvents();
+    if (change && !avail.length) { toast("Nessun evento disponibile oggi"); return resolve(); }
     if (!avail.length) {
       // Nessun evento oggi: se la sessione salvata era un evento ormai chiuso, torna al default.
       if (isEventName(SESSION)) setSession(todaySessionDefault());
       applySessionLock();
       return resolve();
     }
-    if (avail.some((ev) => ev.name === SESSION)) { applySessionLock(); return resolve(); }
+    if (!change && avail.some((ev) => ev.name === SESSION)) { applySessionLock(); return resolve(); }
     const overlay = document.getElementById("eventModal");
+    const cancelWrap = document.getElementById("eventModalCancelWrap");
+    cancelWrap.hidden = !change;
+    document.getElementById("eventModalCancel").onclick = () => { overlay.hidden = true; resolve(); };
     const list = document.getElementById("eventModalList");
     list.innerHTML = avail.map((ev, i) =>
-      `<button class="btnAdd" data-i="${i}" style="width:100%;min-height:52px;border:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:8px;line-height:1.25">${escapeHtml(ev.name)}<br><span style="font-size:13px;font-weight:500">${escapeHtml(localDay(ev.date, 0).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</span></button>`).join("");
+      `<button class="${!change || ev.name === SESSION ? "btnAdd" : "btnCancel"}" data-i="${i}" style="width:100%;min-height:52px;border:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:8px;line-height:1.25">${escapeHtml(ev.name)}<br><span style="font-size:13px;font-weight:500">${escapeHtml(localDay(ev.date, 0).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</span></button>`).join("");
     list.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
       const ev = avail[Number(b.dataset.i)];
       localStorage.setItem("fs_event", JSON.stringify({ id: ev.id, name: ev.name }));
@@ -546,6 +560,7 @@ function requireEvent() {
       applySessionLock();
       overlay.hidden = true;
       if (typeof renderRows === "function") renderRows();
+      if (document.getElementById("sessionsView").classList.contains("active")) renderSessions();
       toast("Evento: " + ev.name);
       resolve();
     }));
@@ -557,14 +572,14 @@ function requireEvent() {
    L'app pubblica non conosce mai il Bearer token vero: manda {code,quantity} a un piccolo
    relay che aggiunge il token e inoltra a ScaricoMagFiera. Configurazione SOLO MANUALE,
    mai letta da un link condiviso: un link che gira (Slack, WhatsApp...) non deve poter
-   configurare l'app da solo. L'utente incolla indirizzo+token nel campo in Storico
+   configurare l'app da solo. L'utente incolla indirizzo+token nel campo in Advanced
    (vedi relayConfigSave piu' sotto), che scrive in localStorage di QUESTA istanza. */
 function relayConfigured() { return !!(localStorage.getItem("fs_relay_url") && localStorage.getItem("fs_relay_token")); }
 
 /* Finestra oraria consentita per l'invio: venerdi'/sabato/domenica, 9:00-23:00 (ora del
    telefono). Fuori da qui l'app NON manda nulla al sito, resta tutto in coda in locale —
    esattamente come se non ci fosse rete — a meno che non sia stata inserita la password di
-   sblocco in Storico. Il Worker verifica in modo indipendente col proprio orologio e segnala
+   sblocco in Advanced. Il Worker verifica in modo indipendente col proprio orologio e segnala
    nel registro ogni scarico che arriva comunque fuori da questa finestra. */
 const UNLOCK_PASSWORD = "salvaculo!";
 function isUnlocked() { return localStorage.getItem("fs_unlocked") === "1"; }
@@ -672,7 +687,7 @@ document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () 
   // lei in z-index, altrimenti la coprirebbe in cima (banner relay, torcia) rubandole spazio.
   document.querySelector(".topbar").style.display = b.dataset.view === "scanView" ? "none" : "flex";
   document.getElementById("topTitle").textContent = b.dataset.view === "scanView" ? "Scansiona" :
-    b.dataset.view === "listView" ? "Sessione: " + SESSION : "Storico sessioni";
+    b.dataset.view === "listView" ? "Sessione: " + SESSION : "Advanced";
   if (b.dataset.view === "listView") renderRows();
   if (b.dataset.view === "sessionsView") renderSessions();
 }));
@@ -1191,7 +1206,13 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
 });
 
 /* ---------- vista Storico: sessioni salvate in locale (mai cancellate) ---------- */
+function renderEventBox() {
+  const ev = availableEvents().find((e) => e.name === SESSION);
+  document.getElementById("eventCurrent").textContent = ev ? ev.name : "Nessun evento (" + SESSION + ")";
+}
+document.getElementById("eventChange").addEventListener("click", () => refreshEvents().then(() => requireEvent(true)));
 function renderDiag() {
+  renderEventBox();
   const box = document.getElementById("diagBox");
   if (!box) return;
   const relayUrl = localStorage.getItem("fs_relay_url") || "";
