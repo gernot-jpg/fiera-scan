@@ -363,14 +363,15 @@ function setSession(name) {
 }
 
 /* ---------- tipo di pagamento ----------
-   Per ora solo locale (riga + CSV), non viene inviato al relay/sito. Una riga = stesso codice
+   Inviato al sito come numero (PAYMENT_TYPE_IDS). Una riga = stesso codice
    + stesso pagamento: la stessa carta venduta con due pagamenti diversi resta su due righe. */
 const PAYMENTS = ["POS", "Contanti", "PayPal", "ScalaPay", "Bonifico"];
 // Codice numerico di ciascun pagamento per ScaricoMagFiera (paymentType), dal programmatore.
 const PAYMENT_TYPE_IDS = { "Contanti": 1, "Bonifico": 2, "ScalaPay": 3, "POS": 4, "PayPal": 5 };
-// Vendite senza codice: si inviano al sito (code "0") solo quando il formato nuovo e' attivo
-// sul relay. Fino ad allora restano in coda sul telefono e partono da sole dopo il cambio.
-const SEND_PHOTO_SALES = false;
+// Vendite senza codice: inviate al sito con code "0". Solo quelle registrate da quando l'invio
+// e' attivo (flag sendable sulla riga): le foto di prova piu' vecchie restano solo locali.
+const SEND_PHOTO_SALES = true;
+const isSendable = (r) => r.kind !== "photo" || (SEND_PHOTO_SALES && r.sendable === true);
 let PAYMENT = PAYMENTS.includes(localStorage.getItem("fs_payment")) ? localStorage.getItem("fs_payment") : "";
 function renderPayBar() {
   const btn = document.getElementById("payOpen");
@@ -451,8 +452,10 @@ function captureCardPhoto() {
   return c.toDataURL("image/jpeg", 0.7);
 }
 async function addPhotoSale(p) {
-  await idbPut("rows", { clientId: uuid(), session: SESSION, eventId: currentEventId(), kind: "photo", code: "", game: p.game, payment: p.payment,
-    photo: p.photo, price: p.price, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0 });
+  const row = { clientId: uuid(), session: SESSION, eventId: currentEventId(), kind: "photo", code: "", game: p.game, payment: p.payment,
+    photo: p.photo, price: p.price, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0, sendable: true };
+  await idbPut("rows", row);
+  return row;
 }
 document.getElementById("payModalClose").addEventListener("click", () => { document.getElementById("payModal").hidden = true; });
 document.getElementById("payModal").addEventListener("click", (e) => { if (e.target.id === "payModal") e.target.hidden = true; });
@@ -975,10 +978,10 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
     const price = readPriceInput("valore d'acquisto");
     if (price === null) return;
     pending.price = price;
-    await addPhotoSale(pending);
+    const row = await addPhotoSale(pending);
     toast("Registrata: " + pending.game + " ×" + pending.qty + " · " + pending.payment);
     hideConfirmSheet(true);
-    showSendResult(true, "REGISTRATA");
+    autoSendRow(row.clientId);
     return;
   }
   const code = (document.getElementById("cfCode").value || "").trim().toUpperCase();
@@ -1017,7 +1020,7 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
       — recupera da solo tutto quello rimasto in coda per offline/errore, nessuna azione
       manuale richiesta. */
 async function trySendRow(r) {
-  if (r.kind === "photo" && !SEND_PHOTO_SALES) return { ok: true }; // non ancora attiva sul sito: resta in coda
+  if (!isSendable(r)) return { ok: true }; // foto vecchia (prima dell'attivazione): solo locale
   const qtyToSend = r.qty - (r.sentQty || 0);
   if (qtyToSend <= 0) return { ok: true };
   if (!isAllowedNow()) {
@@ -1051,9 +1054,10 @@ async function autoSendRow(clientId) {
   const r = await idbGet("rows", clientId);
   if (!r) return;
   const res = await trySendRow(r);
-  if (res.ok) showSendResult(true, "SCARICATA");
+  const okText = r.kind === "photo" ? "INVIATA" : "SCARICATA";
+  if (res.ok) showSendResult(true, okText);
   else if (res.queued) showSendResult(false, "IN CODA\n(fuori orario)");
-  else showSendResult(false, "NON SCARICATA");
+  else showSendResult(false, "NON " + okText);
   if (document.getElementById("listView").classList.contains("active")) renderRows();
 }
 
@@ -1063,7 +1067,7 @@ async function retryPendingSends() {
   retryInFlight = true;
   try {
     const all = await idbGetAll("rows");
-    const pending = all.filter((r) => (r.kind !== "photo" || SEND_PHOTO_SALES) && r.qty - (r.sentQty || 0) > 0);
+    const pending = all.filter((r) => isSendable(r) && r.qty - (r.sentQty || 0) > 0);
     if (!pending.length) return;
     let ok = 0;
     for (const r of pending) { if ((await trySendRow(r)).ok) ok++; }
@@ -1107,8 +1111,11 @@ async function renderRows() {
       <div class="rBottom">
         <div class="rQty"><button class="rMinus" aria-label="Diminuisci quantità">−</button><span class="n">${r.qty}</span><button class="rPlus" aria-label="Aumenta quantità">+</button></div>
         <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
-        <span class="syncTag">solo locale</span>
+        ${!isSendable(r) ? '<span class="syncTag">solo locale</span>'
+          : r.qty - (r.sentQty || 0) <= 0 ? '<span class="syncTag ok">✔ inviato</span>'
+          : `<span class="syncTag pending">${r.qty - (r.sentQty || 0)} da inviare${r.lastError ? " ⚠️" : ""}</span>`}
       </div>
+      ${r.lastError ? `<div class="rSub" style="color:var(--bad)">${escapeHtml(r.lastError)}</div>` : ""}
     </div>`;
     const pending = Math.max(0, r.qty - (r.sentQty || 0));
     const errTitle = r.lastError ? ` title="${escapeHtml(r.lastError)}"` : "";
