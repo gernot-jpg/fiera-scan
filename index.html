@@ -127,6 +127,11 @@ padding:10px 12px;margin-bottom:8px}
 .rQty button{width:36px;height:36px;flex-shrink:0;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font-size:16px}
 .rQty .n{min-width:20px;text-align:center;font-weight:700}
 .rDel{background:none;border:none;color:var(--bad);font-size:20px;padding:8px;flex-shrink:0;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center}
+.sendNow{background:var(--accent2);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;padding:8px 12px;min-height:36px;flex-shrink:0}
+.sendNow:disabled{opacity:.5}
+.zoomable{cursor:zoom-in}
+#photoZoom{align-items:center;z-index:160}
+#photoZoom img{max-width:92vw;max-height:72vh;border-radius:12px;border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.6)}
 .syncTag{font-size:10px;padding:2px 6px;border-radius:8px;flex-shrink:0}
 .syncTag.ok{background:#123321;color:var(--good)}
 .syncTag.pending{background:#3a2f14;color:var(--warn)}
@@ -175,7 +180,7 @@ border-radius:12px;padding:10px 12px}
         <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
       </div>
       <div id="cfPhotoBlock">
-        <img id="cfPhoto" alt="Foto della carta">
+        <img id="cfPhoto" class="zoomable" alt="Foto della carta">
       </div>
       <div id="cfCodeShow"></div>
       <div id="cfPriceBlock">
@@ -318,6 +323,9 @@ border-radius:12px;padding:10px 12px}
     <div class="sheetBtns"><button class="btnCancel" id="payModalClose">Chiudi</button></div>
   </div>
 </div>
+
+<!-- Foto ingrandita: si apre toccando una foto, si chiude toccando ovunque. -->
+<div class="modalOverlay" id="photoZoom" hidden><img id="photoZoomImg" alt="Foto della carta ingrandita"></div>
 
 <!-- Evento obbligatorio (se ce n'e' almeno uno disponibile oggi): niente "Annulla". -->
 <div class="modalOverlay" id="eventModal" hidden style="align-items:center;z-index:140">
@@ -595,8 +603,12 @@ async function sendToSite(row, quantity) {
   const base = localStorage.getItem("fs_relay_url").replace(/\/$/, "");
   const tok = localStorage.getItem("fs_relay_token");
   const operator = localStorage.getItem("fs_operator_name") || "";
+  // Timeout: con la rete di fiera una richiesta puo' restare appesa per minuti. Dopo 20s si
+  // considera fallita e la riga resta in coda.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
   const r = await fetch(base + "/relay/scarico?token=" + encodeURIComponent(tok), {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
     body: JSON.stringify({
       idEvento: row.eventId ?? null,
       code: row.kind === "photo" ? GAME_CODE_PREFIX[row.game] + "-0" : row.code,
@@ -605,7 +617,8 @@ async function sendToSite(row, quantity) {
       paymentType: PAYMENT_TYPE_IDS[row.payment] ?? null,
       operator,
     }),
-  });
+  }).catch((e) => { throw new Error(e.name === "AbortError" ? "timeout: nessuna risposta in 20s" : "rete: " + e.message); })
+    .finally(() => clearTimeout(timer));
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || ("http " + r.status));
   const ok = data.upstream_status >= 200 && data.upstream_status < 300;
@@ -991,8 +1004,13 @@ function readPriceInput(what) {
   if (!/^\d+(\.\d{1,2})?$/.test(raw)) { toast("Valore non valido, es. 12,50"); el.focus(); return null; }
   return Number(raw);
 }
+let adding = false; // blocca il doppio tocco mentre la vendita viene salvata
 document.getElementById("cfAdd").addEventListener("click", async () => {
-  if (!pending) return;
+  if (!pending || adding) return;
+  adding = true;
+  try { await confirmAdd(); } finally { adding = false; }
+});
+async function confirmAdd() {
   if (pending.kind === "photo") {
     const price = readPriceInput("valore d'acquisto");
     if (price === null) return;
@@ -1031,14 +1049,30 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
   toast("Aggiunto: " + pending.code + " ×" + pending.qty + " · " + payment);
   hideConfirmSheet(true);
   autoSendRow(row.clientId); // in background, non blocca lo scanner (rete lenta/assente)
-});
+}
 
 /* Invio al sito: SEMPRE automatico, mai un bottone/conferma separati.
    1. Subito dopo la conferma di ogni scansione (autoSendRow).
    2. In automatico, silenziosamente, quando torna la rete o all'avvio (retryPendingSends)
       — recupera da solo tutto quello rimasto in coda per offline/errore, nessuna azione
       manuale richiesta. */
-async function trySendRow(r) {
+// Una riga alla volta: auto-invio, "Invia ora" e recupero coda non possono mai mandare la
+// stessa riga in parallelo (sarebbe uno scarico doppio). Dentro il blocco la riga viene riletta
+// dal DB, cosi' sentQty e' sempre quello aggiornato e non quello di una copia vecchia.
+const sendLocks = new Set();
+async function trySendRow(rowOrId) {
+  const id = typeof rowOrId === "string" ? rowOrId : rowOrId.clientId;
+  if (sendLocks.has(id)) return { ok: false, busy: true, error: "invio gia' in corso" };
+  sendLocks.add(id);
+  try {
+    const r = await idbGet("rows", id);
+    if (!r) return { ok: true };
+    return await trySendRowLocked(r);
+  } finally {
+    sendLocks.delete(id);
+  }
+}
+async function trySendRowLocked(r) {
   if (!isSendable(r)) return { ok: true }; // foto vecchia (prima dell'attivazione): solo locale
   if (r.kind === "photo" && !GAME_CODE_PREFIX[r.game]) {
     // resta in coda: parte da sola quando il gioco avra' un prefisso
@@ -1078,7 +1112,8 @@ async function autoSendRow(clientId) {
   }
   const r = await idbGet("rows", clientId);
   if (!r) return;
-  const res = await trySendRow(r);
+  const res = await trySendRow(clientId);
+  if (res.busy) return;
   const okText = r.kind === "photo" ? "INVIATA" : "SCARICATA";
   if (res.ok) showSendResult(true, okText);
   else if (res.queued) showSendResult(false, "IN CODA\n(fuori orario)");
@@ -1129,7 +1164,7 @@ async function renderRows() {
   list.innerHTML = rows.map((r) => {
     if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}">
       <div class="rTop" style="gap:10px">
-        <img class="rThumb" src="${escapeHtml(r.photo)}" alt="">
+        <img class="rThumb zoomable" src="${escapeHtml(r.photo)}" alt="Foto della carta">
         <div class="rName">Senza codice · ${escapeHtml(r.game)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}</div>
         <button class="rDel" aria-label="Elimina vendita senza codice">✕</button>
       </div>
@@ -1138,7 +1173,7 @@ async function renderRows() {
         <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
         ${!isSendable(r) ? '<span class="syncTag">solo locale</span>'
           : r.qty - (r.sentQty || 0) <= 0 ? '<span class="syncTag ok">✔ inviato</span>'
-          : `<span class="syncTag pending">${r.qty - (r.sentQty || 0)} da inviare${r.lastError ? " ⚠️" : ""}</span>`}
+          : `<span class="syncTag pending">${r.qty - (r.sentQty || 0)} da inviare${r.lastError ? " ⚠️" : ""}</span><button class="sendNow">Invia ora</button>`}
       </div>
       ${r.lastError ? `<div class="rSub" style="color:var(--bad)">${escapeHtml(r.lastError)}</div>` : ""}
     </div>`;
@@ -1155,7 +1190,7 @@ async function renderRows() {
       <div class="rBottom">
         <div class="rQty"><button class="rMinus" aria-label="Diminuisci quantità di ${escapeHtml(r.code)}">−</button><span class="n">${r.qty}</span><button class="rPlus" aria-label="Aumenta quantità di ${escapeHtml(r.code)}">+</button></div>
         <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
-        ${siteTag}
+        ${siteTag}${pending > 0 ? '<button class="sendNow">Invia ora</button>' : ""}
       </div>
     </div>`;
   }).join("");
@@ -1164,11 +1199,21 @@ async function renderRows() {
     el.querySelector(".rPlus").addEventListener("click", () => bumpRow(cid, 1));
     el.querySelector(".rMinus").addEventListener("click", () => bumpRow(cid, -1));
     el.querySelector(".rDel").addEventListener("click", () => deleteRow(cid));
+    const sn = el.querySelector(".sendNow");
+    if (sn) sn.addEventListener("click", async () => {
+      sn.disabled = true; sn.textContent = "Invio…";
+      await autoSendRow(cid);
+      renderRows();
+    });
   });
 }
 async function bumpRow(clientId, delta) {
   const r = await idbGet("rows", clientId);
   if (!r) return;
+  const sent = r.sentQty || 0;
+  if (delta < 0 && r.qty + delta < sent) {
+    if (!(await customConfirm(`${r.code || "Questa vendita"} risulta già inviata al sito (${sent} pezzi). Ridurla qui NON annulla lo scarico reale. Procedere comunque?`))) return;
+  }
   r.qty = Math.max(0, r.qty + delta);
   r.updatedAt = nowIso();
   if (r.qty === 0) await idbDelete("rows", clientId);
@@ -1324,6 +1369,15 @@ function requireOperatorName() {
   input.focus();
   });
 }
+
+/* ---------- foto ingrandita ---------- */
+document.addEventListener("click", (e) => {
+  const img = e.target.closest && e.target.closest("img.zoomable");
+  if (!img || !img.src) return;
+  document.getElementById("photoZoomImg").src = img.src;
+  document.getElementById("photoZoom").hidden = false;
+});
+document.getElementById("photoZoom").addEventListener("click", (e) => { e.currentTarget.hidden = true; });
 
 /* ---------- tastiera: schermata ferma ----------
    Su iOS (e Chrome Android) aprendo la tastiera il browser fa scorrere in su tutta la pagina
