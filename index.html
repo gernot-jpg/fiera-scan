@@ -368,7 +368,7 @@ function setSession(name) {
 const PAYMENTS = ["POS", "Contanti", "PayPal", "ScalaPay", "Bonifico"];
 // Codice numerico di ciascun pagamento per ScaricoMagFiera (paymentType), dal programmatore.
 const PAYMENT_TYPE_IDS = { "Contanti": 1, "Bonifico": 2, "ScalaPay": 3, "POS": 4, "PayPal": 5 };
-// Vendite senza codice: inviate al sito con code "0". Solo quelle registrate da quando l'invio
+// Vendite senza codice: inviate al sito con code "<PREFISSO>-0" (GAME_CODE_PREFIX). Solo quelle registrate da quando l'invio
 // e' attivo (flag sendable sulla riga): le foto di prova piu' vecchie restano solo locali.
 const SEND_PHOTO_SALES = true;
 const isSendable = (r) => r.kind !== "photo" || (SEND_PHOTO_SALES && r.sendable === true);
@@ -408,6 +408,8 @@ document.getElementById("payOpen").addEventListener("click", openPayMenu);
    scaricare lo stock sul sito, quindi queste righe restano SOLO locali (Sessione + CSV). */
 const GAMES = ["Altered TCG", "Cyberpunk TCG", "Dragonball Super Fusion World", "Lorcana", "Magic The Gathering",
   "One Piece", "Palworld TCG", "Pokémon", "Riftbound", "Yu-Gi-Oh!"];
+// Vendita senza codice -> code "<PREFISSO>-0" (es. "MTG-0"). Giochi senza prefisso: non inviabili.
+const GAME_CODE_PREFIX = { "Magic The Gathering": "MTG", "Pokémon": "PKM", "One Piece": "OP", "Yu-Gi-Oh!": "YGO", "Riftbound": "RFT" };
 let GAME = GAMES.includes(localStorage.getItem("fs_game")) ? localStorage.getItem("fs_game") : "Pokémon";
 let MODE = "code"; // "code" = scansione codice etichetta, "photo" = vendita senza codice
 function renderGameBtn() { document.getElementById("gameOpen").textContent = "🎴 " + GAME; }
@@ -582,7 +584,7 @@ async function sendToSite(row, quantity) {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       idEvento: row.eventId ?? null,
-      code: row.kind === "photo" ? "0" : row.code,
+      code: row.kind === "photo" ? GAME_CODE_PREFIX[row.game] + "-0" : row.code,
       quantity,
       price: row.price ?? null, // prezzo del singolo pezzo
       paymentType: PAYMENT_TYPE_IDS[row.payment] ?? null,
@@ -1023,6 +1025,12 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
       manuale richiesta. */
 async function trySendRow(r) {
   if (!isSendable(r)) return { ok: true }; // foto vecchia (prima dell'attivazione): solo locale
+  if (r.kind === "photo" && !GAME_CODE_PREFIX[r.game]) {
+    // resta in coda: parte da sola quando il gioco avra' un prefisso
+    r.lastError = "nessun prefisso codice per " + r.game;
+    await idbPut("rows", r);
+    return { ok: false, error: r.lastError };
+  }
   const qtyToSend = r.qty - (r.sentQty || 0);
   if (qtyToSend <= 0) return { ok: true };
   if (!isAllowedNow()) {
