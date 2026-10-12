@@ -89,7 +89,11 @@ html.kbOpen #cfPhotoBlock img{max-height:56px}
 /* Passo 1 (codice): al posto di Annulla c'e' "Scansione multipla"; per annullare resta la ✕ in alto. */
 .sheet{padding-top:18px}
 #cfX{display:none;position:absolute;top:6px;right:8px;width:40px;height:40px;border:none;background:none;color:var(--dim);font-size:20px}
-.sheet.step1 #cfX{display:block}
+.sheet.show #cfX{display:block}
+/* Passo prezzo e vendita foto (non Trade): al posto di Annulla il tipo di pagamento, cambiabile. */
+#cfPayBtn{display:none}
+.sheet.price:not(.trade) #cfPayBtn,.sheet.photo:not(.trade) #cfPayBtn{display:block}
+.sheet.price:not(.trade) #cfCancel,.sheet.photo:not(.trade) #cfCancel{display:none}
 #cfMulti{display:none}
 .sheet.step1 #cfMulti{display:block}
 .sheet.step1 #cfCancel{display:none}
@@ -232,6 +236,7 @@ border-radius:12px;padding:10px 12px}
       <div class="sheetBtns">
         <button class="btnCancel" id="cfCancel">Annulla</button>
         <button class="btnMulti" id="cfMulti">Scansione multipla</button>
+        <button class="btnMulti" id="cfPayBtn" aria-label="Cambia tipo di pagamento"></button>
         <button class="btnAdd" id="cfAdd">SCARICA</button>
       </div>
     </div>
@@ -1080,6 +1085,7 @@ function readPriceInput(what) {
 const extraPayLines = () => [...document.querySelectorAll("#cfExtraPays .payLine")];
 function resetExtraPays() {
   document.getElementById("cfExtraPays").innerHTML = "";
+  if (pending) document.getElementById("cfPayBtn").textContent = "💳 " + pending.payment;
   document.getElementById("cfPayTotal").style.display = "none";
   document.getElementById("confirmSheet").classList.toggle("trade", !!pending && pending.payment === "Trade");
 }
@@ -1100,6 +1106,19 @@ function updatePayTotal() {
   tot.style.display = "block";
 }
 document.getElementById("cfPrice").addEventListener("input", updatePayTotal);
+// Cambio pagamento dal passo prezzo: vale per questa vendita e resta selezionato per le prossime.
+document.getElementById("cfPayBtn").addEventListener("click", () => {
+  if (!pending) return;
+  openChoiceMenu("Tipo di pagamento", PAYMENTS, pending.payment, (p) => {
+    pending.payment = p;
+    PAYMENT = p;
+    localStorage.setItem("fs_payment", PAYMENT);
+    renderPayBar();
+    document.getElementById("cfPay").textContent = p;
+    resetExtraPays(); // passando a Trade compare "+ Aggiungi pagamento"
+    document.getElementById("cfPrice").focus({ preventScroll: true });
+  });
+});
 document.getElementById("cfAddPay").addEventListener("click", () => {
   if (!pending) return;
   openChoiceMenu("Altro pagamento", PAYMENTS.filter((p) => p !== "Trade"), "", (payment) => {
@@ -1303,7 +1322,9 @@ function renderMultiPanel() {
       renderMultiPanel();
     });
   });
-  document.getElementById("mpBack").textContent = "Indietro";
+  body.insertAdjacentHTML("beforeend", '<button class="mpLink" id="mpMore">‹ Continua a scansionare</button>');
+  document.getElementById("mpMore").addEventListener("click", closeMultiPanel);
+  document.getElementById("mpBack").textContent = "💳 " + mpPayment;
   next.style.display = "";
   next.textContent = "SCARICA TUTTO";
   updateMultiTotal();
@@ -1313,7 +1334,10 @@ function updateMultiTotal() {
   document.getElementById("mpTotal").textContent = "Totale: " + euro(sum);
 }
 document.getElementById("mpBack").addEventListener("click", () => {
-  if (mpStep === 2) { mpStep = 1; renderMultiPanel(); return; }
+  if (mpStep === 2) {
+    openChoiceMenu("Tipo di pagamento", PAYMENTS, mpPayment, (p) => { mpPayment = p; renderMultiPanel(); });
+    return;
+  }
   closeMultiPanel();
 });
 let multiSending = false;
