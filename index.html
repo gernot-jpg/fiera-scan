@@ -79,9 +79,12 @@ border-radius:14px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 html.kbOpen #cfPhotoBlock img{max-height:56px}
 .sheet.photo #cfPhotoBlock{display:block}
 .sheet.photo #cfCodeBlock{display:none}
-.sheet.integ #cfPhotoBlock,.sheet.integ .qtyRow{display:none}
-#cfIntegNote{display:none;text-align:center;font-weight:700;margin-bottom:6px}
-.sheet.integ #cfIntegNote{display:block}
+#cfAddPay{display:none;width:100%;margin-top:8px;min-height:42px;border-radius:10px;border:1px dashed var(--line);background:transparent;color:var(--fg);font-size:14px;font-weight:600}
+.sheet.trade #cfAddPay{display:block}
+.payLine{display:flex;gap:6px;margin-top:8px;align-items:stretch}
+.payLine .codeInput{flex:1;min-width:0;margin:0}
+.payLine button{border:1px solid var(--line);background:var(--panel2);color:var(--fg);border-radius:10px;padding:0 10px;font-size:14px;font-weight:600}
+#cfPayTotal{display:none;text-align:center;margin-top:8px;font-size:14px;color:var(--dim)}
 #cfPriceBlock{display:none}
 .sheet.photo #cfPriceBlock,.sheet.price #cfPriceBlock{display:block}
 .sheet.price #cfCodeBlock{display:none}
@@ -179,7 +182,6 @@ border-radius:12px;padding:10px 12px}
     <button class="modeArrow" id="modeArrow" aria-label="Vendita senza codice">‹</button>
     <div class="payBar"><button id="payOpen" aria-haspopup="dialog"></button><button id="gameOpen" aria-haspopup="dialog"></button></div>
     <div class="sheet" id="confirmSheet">
-      <div id="cfIntegNote"></div>
       <div id="cfCodeBlock">
         <label class="ocrLabel" for="cfCode">Codice letto (correggi se serve)</label>
         <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
@@ -191,6 +193,10 @@ border-radius:12px;padding:10px 12px}
       <div id="cfPriceBlock">
         <label class="ocrLabel" for="cfPrice" id="cfPriceLabel" style="margin-top:10px">Valore d'acquisto (€)</label>
         <input id="cfPrice" class="codeInput" inputmode="decimal" placeholder="Es. 12,50" autocomplete="off">
+        <!-- Solo con Trade: altri pagamenti della stessa vendita (es. Trade 300 + Contanti 100) -->
+        <div id="cfExtraPays"></div>
+        <div id="cfPayTotal"></div>
+        <button id="cfAddPay" type="button">+ Aggiungi pagamento</button>
       </div>
       <div style="text-align:center;margin-top:10px;font-size:13px;color:var(--dim)">Pagamento: <b id="cfPay" style="color:var(--fg)"></b><span id="cfGameWrap"> · Gioco: <b id="cfGame" style="color:var(--fg)"></b></span></div>
       <div class="qtyRow">
@@ -433,7 +439,6 @@ const GAMES = ["Altered TCG", "Cyberpunk TCG", "Dragonball Super Fusion World", 
   "One Piece", "Palworld TCG", "Pokémon", "Riftbound", "Yu-Gi-Oh!"];
 // Vendita senza codice -> code "<PREFISSO>-0" (es. "MTG-0"). Giochi senza prefisso: non inviabili.
 const GAME_CODE_PREFIX = { "Magic The Gathering": "MTG", "Pokémon": "PKM", "One Piece": "OP", "Yu-Gi-Oh!": "YGO", "Riftbound": "RFT" };
-const PREFIX_GAME = Object.fromEntries(Object.entries(GAME_CODE_PREFIX).map(([g, p]) => [p, g]));
 let GAME = GAMES.includes(localStorage.getItem("fs_game")) ? localStorage.getItem("fs_game") : "Pokémon";
 let MODE = "code"; // "code" = scansione codice etichetta, "photo" = vendita senza codice
 function renderGameBtn() { document.getElementById("gameOpen").textContent = "🎴 " + GAME; }
@@ -480,7 +485,7 @@ function captureCardPhoto() {
 async function addPhotoSale(p) {
   const row = { clientId: uuid(), session: SESSION, eventId: currentEventId(), kind: "photo", code: "", game: p.game, payment: p.payment,
     photo: p.photo || null, price: p.price, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0, sendable: true };
-  if (p.tradeOf) { row.tradeOf = p.tradeOf; row.integration = true; }
+  if (p.payments) row.payments = p.payments;
   if (p.test) row.test = true;
   await idbPut("rows", row);
   return row;
@@ -622,8 +627,10 @@ async function sendToSite(row, quantity) {
       idEvento: row.eventId ?? null,
       code: row.kind === "photo" ? GAME_CODE_PREFIX[row.game] + "-0" : row.code,
       quantity,
-      price: row.price ?? null, // prezzo del singolo pezzo
-      paymentType: PAYMENT_TYPE_IDS[row.payment] ?? null,
+      price: row.price ?? null, // prezzo del singolo pezzo (con piu' pagamenti: totale, qty 1)
+      ...(row.payments && row.payments.length > 1
+        ? { payments: row.payments.map((p) => ({ paymentType: PAYMENT_TYPE_IDS[p.payment], amount: p.amount })), paymentType: 0 }
+        : { paymentType: PAYMENT_TYPE_IDS[row.payment] ?? null }),
       operator,
     }),
   }).catch((e) => { throw new Error(e.name === "AbortError" ? "timeout: nessuna risposta in 20s" : "rete: " + e.message); })
@@ -867,8 +874,8 @@ function cleanCode(raw) { return raw.replace(/\s+/g, "").toUpperCase(); }
 const KNOWN_PREFIXES = ["MTG", "PKM", "YGO", "RFT", "OP"];
 // Struttura completa attesa: uno dei prefissi noti, "-", 3 cifre, ".", 3 cifre (es. MTG-261.820).
 const CODE_PATTERN = new RegExp("^(" + KNOWN_PREFIXES.join("|") + ")-\\d{3}\\.\\d{3}$");
-// Codice di PROVA: MTG-000000 (o MTG-000.000). Le vendite con questo codice, e le integrazioni
-// collegate a un trade di prova, NON vengono mai mandate al sito: l'app finge l'invio riuscito
+// Codice di PROVA: MTG-000000 (o MTG-000.000). Le vendite con questo codice (anche Trade con
+// piu' pagamenti) NON vengono mai mandate al sito: l'app finge l'invio riuscito
 // (anche fuori orario e senza relay), cosi' si puo' provare tutto il flusso senza scaricare stock.
 const TEST_CODE = "MTG-000.000";
 const isTestCode = (code) => /^MTG-000\.?000$/.test(code);
@@ -965,20 +972,8 @@ function showConfirmSheet() {
   pending.payment = PAYMENT;
   document.getElementById("cfPay").textContent = PAYMENT;
   if (pending.kind === "photo") {
-    if (!pending.tradeOf) pending.game = GAME;
+    pending.game = GAME;
     document.getElementById("cfGame").textContent = pending.game;
-    if (pending.tradeOf) {
-      document.getElementById("cfIntegNote").textContent = "🔗 Integrazione al trade";
-      const price = document.getElementById("cfPrice");
-      price.value = "";
-      document.getElementById("cfPriceLabel").textContent = "Importo integrazione (€)";
-      document.getElementById("cfGameWrap").style.display = "";
-      document.getElementById("cfAdd").textContent = "REGISTRA";
-      sheet.classList.remove("price");
-      sheet.classList.add("photo", "integ", "show");
-      price.focus({ preventScroll: true });
-      return;
-    }
     document.getElementById("cfPhoto").src = pending.photo;
     const price = document.getElementById("cfPrice");
     price.value = "";
@@ -986,11 +981,13 @@ function showConfirmSheet() {
     document.getElementById("cfGameWrap").style.display = "";
     document.getElementById("cfAdd").textContent = "REGISTRA";
     sheet.classList.remove("price");
+    resetExtraPays();
     sheet.classList.add("photo", "show");
     price.focus({ preventScroll: true });
     return;
   }
-  sheet.classList.remove("photo", "price", "integ");
+  sheet.classList.remove("photo", "price");
+  resetExtraPays();
   pending.step = 1;
   document.getElementById("cfGameWrap").style.display = "none";
   document.getElementById("cfAdd").textContent = "SCARICA";
@@ -1017,12 +1014,14 @@ function showConfirmSheet() {
   input.select();
 }
 function hideConfirmSheet(resume) {
-  document.getElementById("confirmSheet").classList.remove("show", "price", "integ");
+  document.getElementById("confirmSheet").classList.remove("show", "price", "trade");
   pending = null;
   if (resume) setTimeout(() => { scanPaused = false; }, 350);
 }
 document.getElementById("qtyMinus").addEventListener("click", () => { if (pending && pending.qty > 1) { pending.qty--; document.getElementById("qtyVal").textContent = pending.qty; } });
-document.getElementById("qtyPlus").addEventListener("click", () => { if (pending) { pending.qty++; document.getElementById("qtyVal").textContent = pending.qty; } });
+document.getElementById("qtyPlus").addEventListener("click", () => {
+  if (pending && extraPayLines().length) { toast("Con più pagamenti la quantità è 1"); return; }
+  if (pending) { pending.qty++; document.getElementById("qtyVal").textContent = pending.qty; } });
 document.getElementById("cfCancel").addEventListener("click", () => hideConfirmSheet(true));
 // Prezzo obbligatorio (anche solo 0), virgola o punto. E' il prezzo del SINGOLO pezzo. Ritorna il numero, oppure null (e avvisa) se manca/non valido.
 function readPriceInput(what) {
@@ -1032,6 +1031,80 @@ function readPriceInput(what) {
   if (!/^\d+(\.\d{1,2})?$/.test(raw)) { toast("Valore non valido, es. 12,50"); el.focus(); return null; }
   return Number(raw);
 }
+/* ---------- piu' pagamenti sulla stessa vendita (solo Trade) ----------
+   Es. carta da 400 €: Trade 300 + Contanti 100. Prima riga = cfPrice (tipo = pagamento
+   selezionato, cioe' Trade), "+ Aggiungi pagamento" aggiunge righe Importo + Tipo. Al sito va
+   una sola vendita con Price = totale, payments = lista e PaymentType 0 (formato del
+   programmatore). Con piu' pagamenti la quantita' e' sempre 1 (Price = totale, nessuna ambiguita'). */
+const extraPayLines = () => [...document.querySelectorAll("#cfExtraPays .payLine")];
+function resetExtraPays() {
+  document.getElementById("cfExtraPays").innerHTML = "";
+  document.getElementById("cfPayTotal").style.display = "none";
+  document.getElementById("confirmSheet").classList.toggle("trade", !!pending && pending.payment === "Trade");
+}
+function parseAmount(raw) {
+  const v = (raw || "").trim().replace(/[€\s]/g, "").replace(",", ".");
+  return /^\d+(\.\d{1,2})?$/.test(v) ? Number(v) : null;
+}
+const euro = (n) => "€ " + n.toFixed(2).replace(".", ",");
+function updatePayTotal() {
+  const lines = extraPayLines();
+  const tot = document.getElementById("cfPayTotal");
+  const label = document.getElementById("cfPriceLabel");
+  if (!lines.length) { tot.style.display = "none"; return; }
+  label.textContent = "Importo " + pending.payment + " (€)";
+  const sum = [document.getElementById("cfPrice").value, ...lines.map((l) => l.querySelector("input").value)]
+    .map(parseAmount).reduce((a, b) => a + (b || 0), 0);
+  tot.textContent = "Totale vendita: " + euro(sum);
+  tot.style.display = "block";
+}
+document.getElementById("cfPrice").addEventListener("input", updatePayTotal);
+document.getElementById("cfAddPay").addEventListener("click", () => {
+  if (!pending) return;
+  openChoiceMenu("Altro pagamento", PAYMENTS.filter((p) => p !== "Trade"), "", (payment) => {
+    if (pending.qty > 1) {
+      pending.qty = 1;
+      document.getElementById("qtyVal").textContent = 1;
+      toast("Con più pagamenti la quantità è 1");
+    }
+    const line = document.createElement("div");
+    line.className = "payLine";
+    line.dataset.payment = payment;
+    line.innerHTML = `<input class="codeInput" inputmode="decimal" placeholder="Importo ${escapeHtml(payment)}" autocomplete="off" aria-label="Importo ${escapeHtml(payment)}">
+      <button type="button" class="plType" aria-label="Cambia tipo">${escapeHtml(payment)}</button>
+      <button type="button" class="plDel" aria-label="Togli pagamento">✕</button>`;
+    line.querySelector("input").addEventListener("input", updatePayTotal);
+    line.querySelector(".plType").addEventListener("click", () => {
+      openChoiceMenu("Tipo di pagamento", PAYMENTS.filter((p) => p !== "Trade"), line.dataset.payment, (p) => {
+        line.dataset.payment = p;
+        line.querySelector(".plType").textContent = p;
+        line.querySelector("input").placeholder = "Importo " + p;
+      });
+    });
+    line.querySelector(".plDel").addEventListener("click", () => { line.remove(); updatePayTotal(); });
+    document.getElementById("cfExtraPays").appendChild(line);
+    updatePayTotal();
+    line.querySelector("input").focus();
+  });
+});
+// Ritorna la lista pagamenti [{payment, amount}] se ci sono righe in piu', [] se pagamento
+// unico, null (con avviso) se un importo aggiuntivo manca o non e' valido.
+function readExtraPays(mainAmount) {
+  const lines = extraPayLines();
+  if (!lines.length) return [];
+  const list = [{ payment: pending.payment, amount: mainAmount }];
+  for (const l of lines) {
+    const input = l.querySelector("input");
+    const a = parseAmount(input.value);
+    if (a === null) { toast("Scrivi l'importo " + l.dataset.payment + " (es. 100)"); input.focus(); return null; }
+    list.push({ payment: l.dataset.payment, amount: a });
+  }
+  return list;
+}
+const totalOf = (list) => Math.round(list.reduce((a, p) => a + p.amount, 0) * 100) / 100;
+const paymentsText = (r) => r.payments && r.payments.length > 1
+  ? r.payments.map((p) => p.payment + " " + p.amount.toFixed(2).replace(".", ",")).join(" + ") : (r.payment || "");
+
 let adding = false; // blocca il doppio tocco mentre la vendita viene salvata
 document.getElementById("cfAdd").addEventListener("click", async () => {
   if (!pending || adding) return;
@@ -1040,15 +1113,16 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
 });
 async function confirmAdd() {
   if (pending.kind === "photo") {
-    const integ = !!pending.tradeOf;
-    const price = readPriceInput(integ ? "importo dell'integrazione" : "valore d'acquisto");
+    const price = readPriceInput(extraPayLines().length ? "importo " + pending.payment : "valore d'acquisto");
     if (price === null) return;
-    pending.price = price;
+    const pays = readExtraPays(price);
+    if (pays === null) return;
+    pending.price = pays.length ? totalOf(pays) : price;
+    if (pays.length) { pending.payments = pays; pending.qty = 1; }
     const row = await addPhotoSale(pending);
-    toast((integ ? "Integrazione registrata: € " + price.toFixed(2).replace(".", ",") : "Registrata: " + pending.game + " ×" + pending.qty) + " · " + pending.payment);
-    hideConfirmSheet(!(row.payment === "Trade" && !integ));
-    const sent = autoSendRow(row.clientId);
-    if (row.payment === "Trade" && !integ) offerTradeIntegration(row, sent);
+    toast("Registrata: " + pending.game + " ×" + pending.qty + " · " + paymentsText(row));
+    hideConfirmSheet(true);
+    autoSendRow(row.clientId);
     return;
   }
   let code = (document.getElementById("cfCode").value || "").trim().toUpperCase();
@@ -1073,43 +1147,19 @@ async function confirmAdd() {
     priceEl.focus({ preventScroll: true });
     return;
   }
-  const price = readPriceInput("prezzo di vendita");
+  const price = readPriceInput(extraPayLines().length ? "importo " + pending.payment : "prezzo di vendita");
   if (price === null) return;
+  const pays = readExtraPays(price);
+  if (pays === null) return;
   const payment = pending.payment;
-  const row = await addScan(pending.code, pending.qty, payment, price);
-  toast("Aggiunto: " + pending.code + " ×" + pending.qty + " · " + payment);
-  hideConfirmSheet(payment !== "Trade");
-  const sent = autoSendRow(row.clientId); // in background, non blocca lo scanner (rete lenta/assente)
-  if (payment === "Trade") offerTradeIntegration(row, sent);
+  const row = pays.length
+    ? await addScan(pending.code, 1, payment, totalOf(pays), pays)
+    : await addScan(pending.code, pending.qty, payment, price);
+  toast("Aggiunto: " + pending.code + " ×" + row.qty + " · " + paymentsText(row));
+  hideConfirmSheet(true);
+  autoSendRow(row.clientId); // in background, non blocca lo scanner (rete lenta/assente)
 }
 
-/* Dopo un Trade: proposta di un'integrazione (es. trade + 100 € contanti). E' una vendita
-   senza codice e senza foto, dello stesso gioco del trade, con il suo pagamento e importo,
-   collegata al trade con tradeOf (Sessione + CSV). Al sito va come "<PREFISSO>-0" come le
-   altre vendite senza codice: il collegamento al trade per ora resta solo sul telefono. */
-async function offerTradeIntegration(trade, sent) {
-  scanPaused = true;
-  // aspetto l'esito dell'invio (max 2.5s) perche' il cerchio verde/rosso non copra la domanda
-  await Promise.race([sent, new Promise((r) => setTimeout(r, 2500))]);
-  document.getElementById("sendResultOverlay").style.display = "none";
-  const game = trade.kind === "photo" ? trade.game : PREFIX_GAME[(trade.code || "").split("-")[0]] || GAME;
-  const yes = await customConfirm("Trade registrato. Vuoi aggiungere un'integrazione (es. contanti) collegata a questo trade?", "Sì, integra", "No");
-  if (!yes) { scanPaused = false; return; }
-  openChoiceMenu("Pagamento integrazione", PAYMENTS.filter((p) => p !== "Trade"), "", (payment) => {
-    pending = { kind: "photo", tradeOf: trade.clientId, test: !!trade.test, game, qty: 1, photo: null };
-    showConfirmSheet();
-    pending.payment = payment;
-    document.getElementById("cfPay").textContent = payment;
-  });
-  // chiusura del menu senza scelta = niente integrazione
-  const overlay = document.getElementById("payModal");
-  const obs = new MutationObserver(() => {
-    if (!overlay.hidden) return;
-    obs.disconnect();
-    if (!pending) scanPaused = false;
-  });
-  obs.observe(overlay, { attributes: true, attributeFilter: ["hidden"] });
-}
 
 /* Invio al sito: SEMPRE automatico, mai un bottone/conferma separati.
    1. Subito dopo la conferma di ogni scansione (autoSendRow).
@@ -1211,12 +1261,13 @@ window.addEventListener("online", retryPendingSends);
 /* ---------- coda locale (righe scansionate) — solo IndexedDB, nessun server ----------
    Niente si cancella mai da solo: "exported" e' solo un flag per non riesportare due volte
    le stesse righe, la cronologia resta salvata per sempre (pesa pochissimo). */
-async function addScan(code, qty, payment, price) {
+async function addScan(code, qty, payment, price, payments) {
   // Ogni SCARICA e' una vendita a se' (con il suo prezzo): sempre una riga nuova, mai sommata.
   // sentQty = quanto della riga e' gia' stato inviato al sito: si manda solo la differenza
   // (anche dopo +/- in Sessione), mai due volte lo stesso pezzo.
   const row = { clientId: uuid(), session: SESSION, eventId: currentEventId(), code, payment, price, qty, updatedAt: nowIso(), exported: false, sentQty: 0 };
   if (isTestCode(code)) row.test = true;
+  if (payments && payments.length > 1) row.payments = payments;
   await idbPut("rows", row);
   return row;
 }
@@ -1233,7 +1284,7 @@ async function renderRows() {
     if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}">
       <div class="rTop" style="gap:10px">
         ${r.photo ? `<img class="rThumb zoomable" src="${escapeHtml(r.photo)}" alt="Foto della carta">` : ""}
-        <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · ${escapeHtml(r.game)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}${testTag(r)}</div>
+        <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · ${escapeHtml(r.game)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(paymentsText(r))}</span>` : ""}${testTag(r)}</div>
         <button class="rDel" aria-label="Elimina vendita senza codice">✕</button>
       </div>
       <div class="rBottom">
@@ -1251,7 +1302,7 @@ async function renderRows() {
       : pending > 0 ? `<span class="syncTag pending"${errTitle}>${pending} da inviare${r.lastError ? " ⚠️" : ""}</span>` : "";
     return `<div class="row" data-id="${r.clientId}">
       <div class="rTop">
-        <div class="rName">${escapeHtml(r.code)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}${testTag(r)}</div>
+        <div class="rName">${escapeHtml(r.code)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(paymentsText(r))}</span>` : ""}${testTag(r)}</div>
         <button class="rDel" aria-label="Elimina ${escapeHtml(r.code)}">✕</button>
       </div>
       ${r.lastError ? `<div class="rSub" style="color:var(--bad)">${escapeHtml(r.lastError)}</div>` : ""}
@@ -1278,6 +1329,7 @@ async function renderRows() {
 async function bumpRow(clientId, delta) {
   const r = await idbGet("rows", clientId);
   if (!r) return;
+  if (delta > 0 && r.payments && r.payments.length > 1) { toast("Vendita con più pagamenti: quantità fissa 1, fai una nuova vendita"); return; }
   const sent = r.sentQty || 0;
   if (delta < 0 && r.qty + delta < sent) {
     if (!(await customConfirm(`${r.code || "Questa vendita"} risulta già inviata al sito (${sent} pezzi). Ridurla qui NON annulla lo scarico reale. Procedere comunque?`))) return;
@@ -1304,12 +1356,10 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
   const all = await idbGetAll("rows");
   const rows = all.filter((r) => r.session === SESSION);
   if (!rows.length) return toast("Nessuna carta in questa sessione");
-  const header = ["Codice", "Quantity", "Payment", "Game", "Valore", "Tipo", "Session", "ScannedAt", "Trade"];
-  // Trade = sigla comune del trade e delle sue integrazioni (prime 8 cifre del suo id)
-  const tradeTag = (r) => r.tradeOf ? "T-" + r.tradeOf.slice(0, 8) : r.payment === "Trade" ? "T-" + r.clientId.slice(0, 8) : "";
-  const csvLines = [header.join(",")].concat(rows.map((r) => [r.code || "", r.qty, r.payment || "", r.game || "",
+  const header = ["Codice", "Quantity", "Payment", "Game", "Valore", "Tipo", "Session", "ScannedAt"];
+  const csvLines = [header.join(",")].concat(rows.map((r) => [r.code || "", r.qty, paymentsText(r), r.game || "",
     r.price != null ? r.price.toFixed(2) : "",
-    (r.integration ? "integrazione trade" : r.kind === "photo" ? "senza codice" : "codice") + (r.test ? " (PROVA)" : ""), r.session, r.updatedAt, tradeTag(r)].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
+    (r.integration ? "integrazione trade" : r.kind === "photo" ? "senza codice" : "codice") + (r.test ? " (PROVA)" : ""), r.session, r.updatedAt].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
   const blob = new Blob([csvLines.join("\n")], { type: "text/csv" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
