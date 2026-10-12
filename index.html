@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Fiera Scan</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#184f95">
@@ -78,6 +79,9 @@ border-radius:14px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)}
 html.kbOpen #cfPhotoBlock img{max-height:56px}
 .sheet.photo #cfPhotoBlock{display:block}
 .sheet.photo #cfCodeBlock{display:none}
+.sheet.integ #cfPhotoBlock,.sheet.integ .qtyRow{display:none}
+#cfIntegNote{display:none;text-align:center;font-weight:700;margin-bottom:6px}
+.sheet.integ #cfIntegNote{display:block}
 #cfPriceBlock{display:none}
 .sheet.photo #cfPriceBlock,.sheet.price #cfPriceBlock{display:block}
 .sheet.price #cfCodeBlock{display:none}
@@ -175,6 +179,7 @@ border-radius:12px;padding:10px 12px}
     <button class="modeArrow" id="modeArrow" aria-label="Vendita senza codice">‹</button>
     <div class="payBar"><button id="payOpen" aria-haspopup="dialog"></button><button id="gameOpen" aria-haspopup="dialog"></button></div>
     <div class="sheet" id="confirmSheet">
+      <div id="cfIntegNote"></div>
       <div id="cfCodeBlock">
         <label class="ocrLabel" for="cfCode">Codice letto (correggi se serve)</label>
         <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
@@ -427,6 +432,7 @@ const GAMES = ["Altered TCG", "Cyberpunk TCG", "Dragonball Super Fusion World", 
   "One Piece", "Palworld TCG", "Pokémon", "Riftbound", "Yu-Gi-Oh!"];
 // Vendita senza codice -> code "<PREFISSO>-0" (es. "MTG-0"). Giochi senza prefisso: non inviabili.
 const GAME_CODE_PREFIX = { "Magic The Gathering": "MTG", "Pokémon": "PKM", "One Piece": "OP", "Yu-Gi-Oh!": "YGO", "Riftbound": "RFT" };
+const PREFIX_GAME = Object.fromEntries(Object.entries(GAME_CODE_PREFIX).map(([g, p]) => [p, g]));
 let GAME = GAMES.includes(localStorage.getItem("fs_game")) ? localStorage.getItem("fs_game") : "Pokémon";
 let MODE = "code"; // "code" = scansione codice etichetta, "photo" = vendita senza codice
 function renderGameBtn() { document.getElementById("gameOpen").textContent = "🎴 " + GAME; }
@@ -472,7 +478,8 @@ function captureCardPhoto() {
 }
 async function addPhotoSale(p) {
   const row = { clientId: uuid(), session: SESSION, eventId: currentEventId(), kind: "photo", code: "", game: p.game, payment: p.payment,
-    photo: p.photo, price: p.price, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0, sendable: true };
+    photo: p.photo || null, price: p.price, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0, sendable: true };
+  if (p.tradeOf) { row.tradeOf = p.tradeOf; row.integration = true; }
   await idbPut("rows", row);
   return row;
 }
@@ -670,13 +677,15 @@ function showSendResult(ok, text) {
 
 /* Sostituisce window.confirm() (inerte nelle PWA standalone su iOS): stesso overlay per
    ogni conferma "seria" dell'app (invio al sito, cancellazione di una riga gia' inviata). */
-function customConfirm(message) {
+function customConfirm(message, yesLabel = "Conferma", noLabel = "Annulla") {
   return new Promise((resolve) => {
     const overlay = document.getElementById("confirmModal");
     document.getElementById("confirmModalMsg").textContent = message;
     overlay.hidden = false;
     const yesBtn = document.getElementById("confirmModalYes");
     const noBtn = document.getElementById("confirmModalNo");
+    yesBtn.textContent = yesLabel;
+    noBtn.textContent = noLabel;
     const cleanup = (result) => {
       overlay.hidden = true;
       yesBtn.removeEventListener("click", onYes);
@@ -949,12 +958,24 @@ function showConfirmSheet() {
   pending.payment = PAYMENT;
   document.getElementById("cfPay").textContent = PAYMENT;
   if (pending.kind === "photo") {
-    pending.game = GAME;
+    if (!pending.tradeOf) pending.game = GAME;
+    document.getElementById("cfGame").textContent = pending.game;
+    if (pending.tradeOf) {
+      document.getElementById("cfIntegNote").textContent = "🔗 Integrazione al trade";
+      const price = document.getElementById("cfPrice");
+      price.value = "";
+      document.getElementById("cfPriceLabel").textContent = "Importo integrazione (€)";
+      document.getElementById("cfGameWrap").style.display = "";
+      document.getElementById("cfAdd").textContent = "REGISTRA";
+      sheet.classList.remove("price");
+      sheet.classList.add("photo", "integ", "show");
+      price.focus({ preventScroll: true });
+      return;
+    }
     document.getElementById("cfPhoto").src = pending.photo;
     const price = document.getElementById("cfPrice");
     price.value = "";
     document.getElementById("cfPriceLabel").textContent = "Valore d'acquisto (€ al pezzo)";
-    document.getElementById("cfGame").textContent = GAME;
     document.getElementById("cfGameWrap").style.display = "";
     document.getElementById("cfAdd").textContent = "REGISTRA";
     sheet.classList.remove("price");
@@ -962,7 +983,7 @@ function showConfirmSheet() {
     price.focus({ preventScroll: true });
     return;
   }
-  sheet.classList.remove("photo", "price");
+  sheet.classList.remove("photo", "price", "integ");
   pending.step = 1;
   document.getElementById("cfGameWrap").style.display = "none";
   document.getElementById("cfAdd").textContent = "SCARICA";
@@ -989,7 +1010,7 @@ function showConfirmSheet() {
   input.select();
 }
 function hideConfirmSheet(resume) {
-  document.getElementById("confirmSheet").classList.remove("show", "price");
+  document.getElementById("confirmSheet").classList.remove("show", "price", "integ");
   pending = null;
   if (resume) setTimeout(() => { scanPaused = false; }, 350);
 }
@@ -1012,13 +1033,15 @@ document.getElementById("cfAdd").addEventListener("click", async () => {
 });
 async function confirmAdd() {
   if (pending.kind === "photo") {
-    const price = readPriceInput("valore d'acquisto");
+    const integ = !!pending.tradeOf;
+    const price = readPriceInput(integ ? "importo dell'integrazione" : "valore d'acquisto");
     if (price === null) return;
     pending.price = price;
     const row = await addPhotoSale(pending);
-    toast("Registrata: " + pending.game + " ×" + pending.qty + " · " + pending.payment);
-    hideConfirmSheet(true);
-    autoSendRow(row.clientId);
+    toast((integ ? "Integrazione registrata: € " + price.toFixed(2).replace(".", ",") : "Registrata: " + pending.game + " ×" + pending.qty) + " · " + pending.payment);
+    hideConfirmSheet(!(row.payment === "Trade" && !integ));
+    const sent = autoSendRow(row.clientId);
+    if (row.payment === "Trade" && !integ) offerTradeIntegration(row, sent);
     return;
   }
   const code = (document.getElementById("cfCode").value || "").trim().toUpperCase();
@@ -1047,8 +1070,37 @@ async function confirmAdd() {
   const payment = pending.payment;
   const row = await addScan(pending.code, pending.qty, payment, price);
   toast("Aggiunto: " + pending.code + " ×" + pending.qty + " · " + payment);
-  hideConfirmSheet(true);
-  autoSendRow(row.clientId); // in background, non blocca lo scanner (rete lenta/assente)
+  hideConfirmSheet(payment !== "Trade");
+  const sent = autoSendRow(row.clientId); // in background, non blocca lo scanner (rete lenta/assente)
+  if (payment === "Trade") offerTradeIntegration(row, sent);
+}
+
+/* Dopo un Trade: proposta di un'integrazione (es. trade + 100 € contanti). E' una vendita
+   senza codice e senza foto, dello stesso gioco del trade, con il suo pagamento e importo,
+   collegata al trade con tradeOf (Sessione + CSV). Al sito va come "<PREFISSO>-0" come le
+   altre vendite senza codice: il collegamento al trade per ora resta solo sul telefono. */
+async function offerTradeIntegration(trade, sent) {
+  scanPaused = true;
+  // aspetto l'esito dell'invio (max 2.5s) perche' il cerchio verde/rosso non copra la domanda
+  await Promise.race([sent, new Promise((r) => setTimeout(r, 2500))]);
+  document.getElementById("sendResultOverlay").style.display = "none";
+  const game = trade.kind === "photo" ? trade.game : PREFIX_GAME[(trade.code || "").split("-")[0]] || GAME;
+  const yes = await customConfirm("Trade registrato. Vuoi aggiungere un'integrazione (es. contanti) collegata a questo trade?", "Sì, integra", "No");
+  if (!yes) { scanPaused = false; return; }
+  openChoiceMenu("Pagamento integrazione", PAYMENTS.filter((p) => p !== "Trade"), "", (payment) => {
+    pending = { kind: "photo", tradeOf: trade.clientId, game, qty: 1, photo: null };
+    showConfirmSheet();
+    pending.payment = payment;
+    document.getElementById("cfPay").textContent = payment;
+  });
+  // chiusura del menu senza scelta = niente integrazione
+  const overlay = document.getElementById("payModal");
+  const obs = new MutationObserver(() => {
+    if (!overlay.hidden) return;
+    obs.disconnect();
+    if (!pending) scanPaused = false;
+  });
+  obs.observe(overlay, { attributes: true, attributeFilter: ["hidden"] });
 }
 
 /* Invio al sito: SEMPRE automatico, mai un bottone/conferma separati.
@@ -1164,8 +1216,8 @@ async function renderRows() {
   list.innerHTML = rows.map((r) => {
     if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}">
       <div class="rTop" style="gap:10px">
-        <img class="rThumb zoomable" src="${escapeHtml(r.photo)}" alt="Foto della carta">
-        <div class="rName">Senza codice · ${escapeHtml(r.game)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}</div>
+        ${r.photo ? `<img class="rThumb zoomable" src="${escapeHtml(r.photo)}" alt="Foto della carta">` : ""}
+        <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · ${escapeHtml(r.game)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}</div>
         <button class="rDel" aria-label="Elimina vendita senza codice">✕</button>
       </div>
       <div class="rBottom">
@@ -1236,10 +1288,12 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
   const all = await idbGetAll("rows");
   const rows = all.filter((r) => r.session === SESSION);
   if (!rows.length) return toast("Nessuna carta in questa sessione");
-  const header = ["Codice", "Quantity", "Payment", "Game", "Valore", "Tipo", "Session", "ScannedAt"];
+  const header = ["Codice", "Quantity", "Payment", "Game", "Valore", "Tipo", "Session", "ScannedAt", "Trade"];
+  // Trade = sigla comune del trade e delle sue integrazioni (prime 8 cifre del suo id)
+  const tradeTag = (r) => r.tradeOf ? "T-" + r.tradeOf.slice(0, 8) : r.payment === "Trade" ? "T-" + r.clientId.slice(0, 8) : "";
   const csvLines = [header.join(",")].concat(rows.map((r) => [r.code || "", r.qty, r.payment || "", r.game || "",
     r.price != null ? r.price.toFixed(2) : "",
-    r.kind === "photo" ? "senza codice" : "codice", r.session, r.updatedAt].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
+    r.integration ? "integrazione trade" : r.kind === "photo" ? "senza codice" : "codice", r.session, r.updatedAt, tradeTag(r)].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
   const blob = new Blob([csvLines.join("\n")], { type: "text/csv" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
