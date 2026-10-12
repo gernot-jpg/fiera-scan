@@ -86,6 +86,29 @@ html.kbOpen #cfPhotoBlock img{max-height:56px}
 .payLine button{border:1px solid var(--line);background:var(--panel2);color:var(--fg);border-radius:10px;padding:0 10px;font-size:14px;font-weight:600}
 #cfPayTotal{display:none;text-align:center;margin-top:8px;font-size:14px;color:var(--dim)}
 #cfPriceBlock{display:none}
+/* Passo 1 (codice): al posto di Annulla c'e' "Scansione multipla"; per annullare resta la ✕ in alto. */
+.sheet{padding-top:18px}
+#cfX{display:none;position:absolute;top:6px;right:8px;width:40px;height:40px;border:none;background:none;color:var(--dim);font-size:20px}
+.sheet.step1 #cfX{display:block}
+#cfMulti{display:none}
+.sheet.step1 #cfMulti{display:block}
+.sheet.step1 #cfCancel{display:none}
+.btnMulti{background:var(--accent);color:#fff}
+#basketBar{position:absolute;top:calc(12px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:4;
+border:1px solid rgba(255,255,255,.4);background:rgba(24,79,149,.8);color:#fff;border-radius:20px;padding:9px 16px;font-size:14px;font-weight:700;white-space:nowrap}
+#basketBar[hidden]{display:none}
+#multiPanel{position:fixed;inset:0;z-index:90;background:var(--bg);display:flex;flex-direction:column}
+#multiPanel[hidden]{display:none}
+#multiPanel .mpHead{padding:calc(14px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid var(--line)}
+#multiPanel .mpHead h2{margin:0;font-size:18px}
+#multiPanel .mpSub{color:var(--dim);font-size:13px;margin-top:4px}
+#multiPanel .mpBody{flex:1;overflow-y:auto;padding:12px 16px}
+#multiPanel .mpFoot{padding:10px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+.mpItem{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.mpItem .mpTop{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;font-size:16px}
+.mpItem .codeInput{margin-top:8px;font-size:18px;padding:10px}
+.mpTotal{text-align:center;font-size:15px;margin:6px 0 10px;color:var(--dim)}
+.mpLink{background:none;border:none;color:var(--accent2);font-size:14px;padding:6px 0}
 .sheet.photo #cfPriceBlock,.sheet.price #cfPriceBlock{display:block}
 .sheet.price #cfCodeBlock{display:none}
 #cfCodeShow{display:none;text-align:center;font-size:20px;font-weight:700;letter-spacing:.5px}
@@ -181,7 +204,9 @@ border-radius:12px;padding:10px 12px}
     <!-- Tipo di pagamento: resta selezionato finche' non lo cambi, vale per ogni carta scansionata dopo. -->
     <button class="modeArrow" id="modeArrow" aria-label="Vendita senza codice">‹</button>
     <div class="payBar"><button id="payOpen" aria-haspopup="dialog"></button><button id="gameOpen" aria-haspopup="dialog"></button></div>
+    <button id="basketBar" hidden></button>
     <div class="sheet" id="confirmSheet">
+      <button id="cfX" type="button" aria-label="Annulla scansione">✕</button>
       <div id="cfCodeBlock">
         <label class="ocrLabel" for="cfCode">Codice letto (correggi se serve)</label>
         <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
@@ -206,6 +231,7 @@ border-radius:12px;padding:10px 12px}
       </div>
       <div class="sheetBtns">
         <button class="btnCancel" id="cfCancel">Annulla</button>
+        <button class="btnMulti" id="cfMulti">Scansione multipla</button>
         <button class="btnAdd" id="cfAdd">SCARICA</button>
       </div>
     </div>
@@ -332,6 +358,19 @@ border-radius:12px;padding:10px 12px}
     <div class="modalMsg"><b id="payModalTitle">Tipo di pagamento</b></div>
     <div id="payModalList" role="radiogroup" style="max-height:60vh;overflow-y:auto"></div>
     <div class="sheetBtns"><button class="btnCancel" id="payModalClose">Chiudi</button></div>
+  </div>
+</div>
+
+<!-- Scansione multipla: 1) metodo di pagamento  2) prezzo di ogni codice  -> SCARICA TUTTO -->
+<div id="multiPanel" hidden>
+  <div class="mpHead"><h2 id="mpTitle"></h2><div class="mpSub" id="mpSub"></div></div>
+  <div class="mpBody" id="mpBody"></div>
+  <div class="mpFoot">
+    <div class="mpTotal" id="mpTotal"></div>
+    <div class="sheetBtns">
+      <button class="btnCancel" id="mpBack">Indietro</button>
+      <button class="btnAdd" id="mpNext"></button>
+    </div>
   </div>
 </div>
 
@@ -989,8 +1028,9 @@ function showConfirmSheet() {
   sheet.classList.remove("photo", "price");
   resetExtraPays();
   pending.step = 1;
+  sheet.classList.add("step1");
+  document.getElementById("cfAdd").textContent = BASKET.length ? "💳 PAGAMENTO" : "SCARICA";
   document.getElementById("cfGameWrap").style.display = "none";
-  document.getElementById("cfAdd").textContent = "SCARICA";
   // Due controlli indipendenti: la confidenza dichiarata da Tesseract (0-100, puo' essere
   // ingannevole: a volte e' "sicuro" anche leggendo male) E la struttura attesa del codice
   // (prefisso noto-NNN.NNN) — se anche uno solo fallisce, avviso forte prima di confermare.
@@ -1014,7 +1054,7 @@ function showConfirmSheet() {
   input.select();
 }
 function hideConfirmSheet(resume) {
-  document.getElementById("confirmSheet").classList.remove("show", "price", "trade");
+  document.getElementById("confirmSheet").classList.remove("show", "price", "trade", "step1");
   pending = null;
   if (resume) setTimeout(() => { scanPaused = false; }, 350);
 }
@@ -1023,6 +1063,7 @@ document.getElementById("qtyPlus").addEventListener("click", () => {
   if (pending && extraPayLines().length) { toast("Con più pagamenti la quantità è 1"); return; }
   if (pending) { pending.qty++; document.getElementById("qtyVal").textContent = pending.qty; } });
 document.getElementById("cfCancel").addEventListener("click", () => hideConfirmSheet(true));
+document.getElementById("cfX").addEventListener("click", () => hideConfirmSheet(true));
 // Prezzo obbligatorio (anche solo 0), virgola o punto. E' il prezzo del SINGOLO pezzo. Ritorna il numero, oppure null (e avvisa) se manca/non valido.
 function readPriceInput(what) {
   const el = document.getElementById("cfPrice");
@@ -1135,8 +1176,17 @@ async function confirmAdd() {
     document.getElementById("cfCode").classList.add("lowConf");
     return;
   }
+  // Scansione multipla in corso: il bottone e' "PAGAMENTO" -> aggiunge anche questo codice e
+  // passa alla schermata di pagamento.
+  if (pending.step === 1 && BASKET.length) {
+    addToBasket(code, pending.qty);
+    hideConfirmSheet(false);
+    openMultiPanel();
+    return;
+  }
   // 1° SCARICA: codice valido -> passo al prezzo di vendita. 2° SCARICA: salva e invia.
   if (pending.step === 1) {
+    document.getElementById("confirmSheet").classList.remove("step1");
     pending.code = code;
     pending.step = 2;
     document.getElementById("cfCodeShow").textContent = code;
@@ -1160,6 +1210,155 @@ async function confirmAdd() {
   autoSendRow(row.clientId); // in background, non blocca lo scanner (rete lenta/assente)
 }
 
+
+/* ---------- scansione multipla ----------
+   "Scansione multipla" nel passo 1 mette codice + quantita' in una lista (BASKET, salvata in
+   localStorage: sopravvive a una chiusura dell'app) e torna alla fotocamera. Con la lista non
+   vuota SCARICA diventa PAGAMENTO: schermata 1 = metodo di pagamento (uno per tutta la lista),
+   schermata 2 = prezzo al pezzo di ogni codice, poi SCARICA TUTTO = una riga/scarico per codice,
+   esattamente come le vendite singole (invio, coda, retry, registro). */
+let BASKET = (() => { try { return JSON.parse(localStorage.getItem("fs_basket") || "[]"); } catch (e) { return []; } })();
+function saveBasket() {
+  try { localStorage.setItem("fs_basket", JSON.stringify(BASKET)); } catch (e) {}
+  const bar = document.getElementById("basketBar");
+  const pieces = BASKET.reduce((a, b) => a + b.qty, 0);
+  bar.hidden = !BASKET.length;
+  bar.textContent = `🧺 ${BASKET.length} codic${BASKET.length === 1 ? "e" : "i"} · ${pieces} pz — Pagamento ›`;
+}
+function addToBasket(code, qty) {
+  BASKET.push({ id: uuid(), code, qty, price: "" });
+  saveBasket();
+}
+document.getElementById("cfMulti").addEventListener("click", () => {
+  if (!pending || pending.step !== 1) return;
+  let code = (document.getElementById("cfCode").value || "").trim().toUpperCase();
+  if (isTestCode(code)) code = TEST_CODE;
+  if (!CODE_PATTERN.test(code)) {
+    toast("Formato non valido: usa PREFISSO-NNN.NNN (es. MTG-261.417)", 3000);
+    document.getElementById("cfCode").classList.add("lowConf");
+    return;
+  }
+  addToBasket(code, pending.qty);
+  toast(`Aggiunto alla lista: ${code} ×${pending.qty} — scansiona il prossimo`);
+  hideConfirmSheet(true);
+});
+document.getElementById("basketBar").addEventListener("click", () => {
+  if (document.getElementById("confirmSheet").classList.contains("show")) return;
+  scanPaused = true;
+  openMultiPanel();
+});
+let mpStep = 1, mpPayment = "";
+function openMultiPanel() {
+  mpStep = 1;
+  mpPayment = PAYMENT;
+  renderMultiPanel();
+  document.getElementById("multiPanel").hidden = false;
+}
+function closeMultiPanel() {
+  document.getElementById("multiPanel").hidden = true;
+  setTimeout(() => { scanPaused = false; }, 350);
+}
+function renderMultiPanel() {
+  const pieces = BASKET.reduce((a, b) => a + b.qty, 0);
+  document.getElementById("mpSub").textContent = `${BASKET.length} codic${BASKET.length === 1 ? "e" : "i"} · ${pieces} pezzi`;
+  const body = document.getElementById("mpBody");
+  const next = document.getElementById("mpNext");
+  if (mpStep === 1) {
+    document.getElementById("mpTitle").textContent = "Metodo di pagamento";
+    body.innerHTML = PAYMENTS.map((p, i) => `<button class="payOpt${p === mpPayment ? " on" : ""}" data-i="${i}">${escapeHtml(p)}</button>`).join("")
+      + `<div style="margin-top:14px">${BASKET.map((b) => `<div class="mpSub">${escapeHtml(b.code)} ×${b.qty}</div>`).join("")}</div>`
+      + `<button class="mpLink" id="mpEmpty">🗑 Svuota la lista</button>`;
+    body.querySelectorAll(".payOpt").forEach((b) => b.addEventListener("click", () => {
+      mpPayment = PAYMENTS[Number(b.dataset.i)];
+      mpStep = 2;
+      renderMultiPanel();
+    }));
+    document.getElementById("mpEmpty").addEventListener("click", async () => {
+      if (!(await customConfirm("Svuotare la lista? I codici scansionati verranno tolti (niente e' stato scaricato)."))) return;
+      BASKET = [];
+      saveBasket();
+      closeMultiPanel();
+    });
+    document.getElementById("mpBack").textContent = "Continua a scansionare";
+    next.style.display = "none";
+    document.getElementById("mpTotal").textContent = "";
+    return;
+  }
+  document.getElementById("mpTitle").textContent = "Prezzo di ogni codice";
+  document.getElementById("mpSub").innerHTML += ` · Pagamento: <b>${escapeHtml(mpPayment)}</b>`;
+  body.innerHTML = BASKET.map((b) => `<div class="mpItem" data-id="${b.id}">
+      <div class="mpTop"><span>${escapeHtml(b.code)} ×${b.qty}</span><button class="rDel" aria-label="Togli ${escapeHtml(b.code)}">✕</button></div>
+      <input class="codeInput" inputmode="decimal" placeholder="Prezzo € al pezzo" autocomplete="off" value="${escapeHtml(b.price)}" aria-label="Prezzo di ${escapeHtml(b.code)}">
+    </div>`).join("");
+  body.querySelectorAll(".mpItem").forEach((el) => {
+    const item = BASKET.find((b) => b.id === el.dataset.id);
+    const input = el.querySelector("input");
+    input.addEventListener("input", () => { item.price = input.value; saveBasket(); updateMultiTotal(); input.classList.remove("lowConf"); });
+    input.addEventListener("focus", () => setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 300));
+    el.querySelector(".rDel").addEventListener("click", async () => {
+      if (!(await customConfirm(`Togliere ${item.code} dalla lista?`))) return;
+      BASKET = BASKET.filter((b) => b !== item);
+      saveBasket();
+      if (!BASKET.length) { closeMultiPanel(); return; }
+      renderMultiPanel();
+    });
+  });
+  document.getElementById("mpBack").textContent = "Indietro";
+  next.style.display = "";
+  next.textContent = "SCARICA TUTTO";
+  updateMultiTotal();
+}
+function updateMultiTotal() {
+  const sum = BASKET.reduce((a, b) => a + (parseAmount(b.price) || 0) * b.qty, 0);
+  document.getElementById("mpTotal").textContent = "Totale: " + euro(sum);
+}
+document.getElementById("mpBack").addEventListener("click", () => {
+  if (mpStep === 2) { mpStep = 1; renderMultiPanel(); return; }
+  closeMultiPanel();
+});
+let multiSending = false;
+document.getElementById("mpNext").addEventListener("click", async () => {
+  if (mpStep !== 2 || multiSending) return;
+  // prezzo obbligatorio per ogni codice (anche 0)
+  for (const el of document.querySelectorAll("#mpBody .mpItem")) {
+    const input = el.querySelector("input");
+    if (parseAmount(input.value) === null) {
+      input.classList.add("lowConf");
+      input.focus();
+      toast("Scrivi il prezzo di ogni codice (anche 0), es. 12,50");
+      return;
+    }
+  }
+  multiSending = true;
+  try {
+    const items = BASKET.slice();
+    const rows = [];
+    for (const b of items) rows.push(await addScan(b.code, b.qty, mpPayment, parseAmount(b.price)));
+    BASKET = [];
+    saveBasket();
+    document.getElementById("multiPanel").hidden = true;
+    toast(`Registrate ${rows.length} vendite · ${mpPayment}`);
+    await sendMany(rows);
+    setTimeout(() => { scanPaused = false; }, 350);
+  } finally {
+    multiSending = false;
+  }
+});
+// Invio in sequenza (mai in parallelo: stesso blocco per riga di trySendRow), un solo esito finale.
+async function sendMany(rows) {
+  let ok = 0, queued = 0, failed = 0;
+  for (const row of rows) {
+    if (!relayConfigured() && !row.test) { failed++; continue; }
+    const res = await trySendRow(row.clientId);
+    if (res.ok) ok++; else if (res.queued) queued++; else failed++;
+  }
+  if (!relayConfigured()) updateRelayBanner();
+  const n = rows.length;
+  if (ok === n) showSendResult(true, `SCARICATE ${ok}/${n}` + (rows.every((r) => r.test) ? "\n(PROVA, niente al sito)" : ""));
+  else if (queued && !failed) showSendResult(false, `IN CODA ${queued}/${n}\n(fuori orario)`);
+  else showSendResult(false, `SCARICATE ${ok}/${n}` + (failed ? `\n${failed} non scaricate` : "") + (queued ? `\n${queued} in coda` : ""));
+  if (document.getElementById("listView").classList.contains("active")) renderRows();
+}
 
 /* Invio al sito: SEMPRE automatico, mai un bottone/conferma separati.
    1. Subito dopo la conferma di ogni scansione (autoSendRow).
@@ -1523,6 +1722,7 @@ document.getElementById("photoZoom").addEventListener("click", (e) => { e.curren
   setSession(SESSION);
   renderPayBar();
   renderGameBtn();
+  saveBasket(); // mostra la lista della scansione multipla rimasta aperta
   // Prima il nome, poi l'evento: due finestre in sequenza, non sovrapposte.
   requireOperatorName().then(refreshEvents).then(requireEvent);
   // App lasciata aperta a cavallo di un giorno: al rientro ricontrolla che l'evento sia ancora valido.
