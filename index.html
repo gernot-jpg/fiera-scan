@@ -382,9 +382,9 @@ function setSession(name) {
 /* ---------- tipo di pagamento ----------
    Inviato al sito come numero (PAYMENT_TYPE_IDS). Una riga = stesso codice
    + stesso pagamento: la stessa carta venduta con due pagamenti diversi resta su due righe. */
-const PAYMENTS = ["POS", "Contanti", "PayPal", "ScalaPay", "Bonifico"];
+const PAYMENTS = ["POS", "Contanti", "PayPal", "ScalaPay", "Bonifico", "Trade"];
 // Codice numerico di ciascun pagamento per ScaricoMagFiera (paymentType), dal programmatore.
-const PAYMENT_TYPE_IDS = { "Contanti": 1, "Bonifico": 2, "ScalaPay": 3, "POS": 4, "PayPal": 5 };
+const PAYMENT_TYPE_IDS = { "Contanti": 1, "Bonifico": 2, "ScalaPay": 3, "POS": 4, "PayPal": 5, "Trade": 6 };
 // Vendite senza codice: inviate al sito con code "<PREFISSO>-0" (GAME_CODE_PREFIX). Solo quelle registrate da quando l'invio
 // e' attivo (flag sendable sulla riga): le foto di prova piu' vecchie restano solo locali.
 const SEND_PHOTO_SALES = true;
