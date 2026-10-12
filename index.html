@@ -394,6 +394,7 @@ const PAYMENT_TYPE_IDS = { "Contanti": 1, "Bonifico": 2, "ScalaPay": 3, "POS": 4
 // e' attivo (flag sendable sulla riga): le foto di prova piu' vecchie restano solo locali.
 const SEND_PHOTO_SALES = true;
 const isSendable = (r) => r.kind !== "photo" || (SEND_PHOTO_SALES && r.sendable === true);
+const testTag = (r) => r.test ? ' <span class="payTag" style="background:var(--warn);color:#000">PROVA</span>' : "";
 let PAYMENT = PAYMENTS.includes(localStorage.getItem("fs_payment")) ? localStorage.getItem("fs_payment") : "";
 function renderPayBar() {
   const btn = document.getElementById("payOpen");
@@ -480,6 +481,7 @@ async function addPhotoSale(p) {
   const row = { clientId: uuid(), session: SESSION, eventId: currentEventId(), kind: "photo", code: "", game: p.game, payment: p.payment,
     photo: p.photo || null, price: p.price, qty: p.qty, updatedAt: nowIso(), exported: false, sentQty: 0, sendable: true };
   if (p.tradeOf) { row.tradeOf = p.tradeOf; row.integration = true; }
+  if (p.test) row.test = true;
   await idbPut("rows", row);
   return row;
 }
@@ -865,6 +867,11 @@ function cleanCode(raw) { return raw.replace(/\s+/g, "").toUpperCase(); }
 const KNOWN_PREFIXES = ["MTG", "PKM", "YGO", "RFT", "OP"];
 // Struttura completa attesa: uno dei prefissi noti, "-", 3 cifre, ".", 3 cifre (es. MTG-261.820).
 const CODE_PATTERN = new RegExp("^(" + KNOWN_PREFIXES.join("|") + ")-\\d{3}\\.\\d{3}$");
+// Codice di PROVA: MTG-000000 (o MTG-000.000). Le vendite con questo codice, e le integrazioni
+// collegate a un trade di prova, NON vengono mai mandate al sito: l'app finge l'invio riuscito
+// (anche fuori orario e senza relay), cosi' si puo' provare tutto il flusso senza scaricare stock.
+const TEST_CODE = "MTG-000.000";
+const isTestCode = (code) => /^MTG-000\.?000$/.test(code);
 
 function levenshtein(a, b) {
   const m = a.length, n = b.length;
@@ -1044,8 +1051,9 @@ async function confirmAdd() {
     if (row.payment === "Trade" && !integ) offerTradeIntegration(row, sent);
     return;
   }
-  const code = (document.getElementById("cfCode").value || "").trim().toUpperCase();
+  let code = (document.getElementById("cfCode").value || "").trim().toUpperCase();
   if (!code) { toast("Codice vuoto"); return; }
+  if (isTestCode(code)) code = TEST_CODE;
   // Blocco duro: si scarica SOLO un codice che rispetta esattamente PREFISSO-NNN.NNN, anche
   // se scritto o corretto a mano — niente eccezioni, la sheet resta aperta finche' non e' valido.
   if (!CODE_PATTERN.test(code)) {
@@ -1088,7 +1096,7 @@ async function offerTradeIntegration(trade, sent) {
   const yes = await customConfirm("Trade registrato. Vuoi aggiungere un'integrazione (es. contanti) collegata a questo trade?", "Sì, integra", "No");
   if (!yes) { scanPaused = false; return; }
   openChoiceMenu("Pagamento integrazione", PAYMENTS.filter((p) => p !== "Trade"), "", (payment) => {
-    pending = { kind: "photo", tradeOf: trade.clientId, game, qty: 1, photo: null };
+    pending = { kind: "photo", tradeOf: trade.clientId, test: !!trade.test, game, qty: 1, photo: null };
     showConfirmSheet();
     pending.payment = payment;
     document.getElementById("cfPay").textContent = payment;
@@ -1125,6 +1133,13 @@ async function trySendRow(rowOrId) {
   }
 }
 async function trySendRowLocked(r) {
+  if (r.test) {
+    // riga di prova: nessuna rete, invio simulato come riuscito
+    r.sentQty = r.qty;
+    r.lastError = null;
+    await idbPut("rows", r);
+    return { ok: true };
+  }
   if (!isSendable(r)) return { ok: true }; // foto vecchia (prima dell'attivazione): solo locale
   if (r.kind === "photo" && !GAME_CODE_PREFIX[r.game]) {
     // resta in coda: parte da sola quando il gioco avra' un prefisso
@@ -1157,16 +1172,16 @@ async function trySendRowLocked(r) {
 }
 
 async function autoSendRow(clientId) {
-  if (!relayConfigured()) {
+  const r = await idbGet("rows", clientId);
+  if (!r) return;
+  if (!relayConfigured() && !r.test) {
     showSendResult(false, "NON SCARICATA");
     updateRelayBanner();
     return;
   }
-  const r = await idbGet("rows", clientId);
-  if (!r) return;
   const res = await trySendRow(clientId);
   if (res.busy) return;
-  const okText = r.kind === "photo" ? "INVIATA" : "SCARICATA";
+  const okText = (r.kind === "photo" ? "INVIATA" : "SCARICATA") + (r.test ? "\n(PROVA, niente al sito)" : "");
   if (res.ok) showSendResult(true, okText);
   else if (res.queued) showSendResult(false, "IN CODA\n(fuori orario)");
   else showSendResult(false, "NON " + okText);
@@ -1201,6 +1216,7 @@ async function addScan(code, qty, payment, price) {
   // sentQty = quanto della riga e' gia' stato inviato al sito: si manda solo la differenza
   // (anche dopo +/- in Sessione), mai due volte lo stesso pezzo.
   const row = { clientId: uuid(), session: SESSION, eventId: currentEventId(), code, payment, price, qty, updatedAt: nowIso(), exported: false, sentQty: 0 };
+  if (isTestCode(code)) row.test = true;
   await idbPut("rows", row);
   return row;
 }
@@ -1217,7 +1233,7 @@ async function renderRows() {
     if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}">
       <div class="rTop" style="gap:10px">
         ${r.photo ? `<img class="rThumb zoomable" src="${escapeHtml(r.photo)}" alt="Foto della carta">` : ""}
-        <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · ${escapeHtml(r.game)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}</div>
+        <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · ${escapeHtml(r.game)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}${testTag(r)}</div>
         <button class="rDel" aria-label="Elimina vendita senza codice">✕</button>
       </div>
       <div class="rBottom">
@@ -1235,7 +1251,7 @@ async function renderRows() {
       : pending > 0 ? `<span class="syncTag pending"${errTitle}>${pending} da inviare${r.lastError ? " ⚠️" : ""}</span>` : "";
     return `<div class="row" data-id="${r.clientId}">
       <div class="rTop">
-        <div class="rName">${escapeHtml(r.code)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}</div>
+        <div class="rName">${escapeHtml(r.code)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(r.payment)}</span>` : ""}${testTag(r)}</div>
         <button class="rDel" aria-label="Elimina ${escapeHtml(r.code)}">✕</button>
       </div>
       ${r.lastError ? `<div class="rSub" style="color:var(--bad)">${escapeHtml(r.lastError)}</div>` : ""}
@@ -1276,7 +1292,7 @@ async function deleteRow(clientId) {
   const r = await idbGet("rows", clientId);
   // cancellare la riga NON annulla lo scarico gia' fatto sul sito reale: chiedo conferma
   // esplicita per non far perdere la traccia di un pezzo gia' scaricato per davvero.
-  if (r && (r.sentQty || 0) > 0) {
+  if (r && !r.test && (r.sentQty || 0) > 0) {
     if (!(await customConfirm(`${r.code} risulta già inviato al sito (${r.sentQty} pezzi). Cancellarla qui NON annulla lo scarico reale. Procedere comunque?`))) return;
   }
   await idbDelete("rows", clientId);
@@ -1293,7 +1309,7 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
   const tradeTag = (r) => r.tradeOf ? "T-" + r.tradeOf.slice(0, 8) : r.payment === "Trade" ? "T-" + r.clientId.slice(0, 8) : "";
   const csvLines = [header.join(",")].concat(rows.map((r) => [r.code || "", r.qty, r.payment || "", r.game || "",
     r.price != null ? r.price.toFixed(2) : "",
-    r.integration ? "integrazione trade" : r.kind === "photo" ? "senza codice" : "codice", r.session, r.updatedAt, tradeTag(r)].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
+    (r.integration ? "integrazione trade" : r.kind === "photo" ? "senza codice" : "codice") + (r.test ? " (PROVA)" : ""), r.session, r.updatedAt, tradeTag(r)].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
   const blob = new Blob([csvLines.join("\n")], { type: "text/csv" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
