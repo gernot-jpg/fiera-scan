@@ -584,7 +584,7 @@ function requireEvent(change) {
    (vedi relayConfigSave piu' sotto), che scrive in localStorage di QUESTA istanza. */
 function relayConfigured() { return !!(localStorage.getItem("fs_relay_url") && localStorage.getItem("fs_relay_token")); }
 
-/* Finestra oraria consentita per l'invio: venerdi'/sabato/domenica, 9:00-23:00 (ora del
+/* Finestra oraria consentita per l'invio: venerdi'/sabato/domenica, 8:00-23:00 (ora del
    telefono). Fuori da qui l'app NON manda nulla al sito, resta tutto in coda in locale —
    esattamente come se non ci fosse rete — a meno che non sia stata inserita la password di
    sblocco in Advanced. Il Worker verifica in modo indipendente col proprio orologio e segnala
@@ -596,7 +596,7 @@ function isAllowedNow() {
   const now = new Date();
   const day = now.getDay(); // 0=domenica, 5=venerdi', 6=sabato
   const hour = now.getHours();
-  return (day === 0 || day === 5 || day === 6) && hour >= 9 && hour < 23;
+  return (day === 0 || day === 5 || day === 6) && hour >= 8 && hour < 23;
 }
 
 async function sendToSite(row, quantity) {
@@ -1085,7 +1085,7 @@ async function trySendRowLocked(r) {
   if (!isAllowedNow()) {
     // fuori dalla finestra consentita: NON si contatta nemmeno la rete, resta in coda
     // esattamente come offline — nessuna richiesta arriva al Worker, quindi nessun log.
-    return { ok: false, queued: true, error: "fuori dalla finestra consentita (ven/sab/dom 9-23)" };
+    return { ok: false, queued: true, error: "fuori dalla finestra consentita (ven/sab/dom 8-23)" };
   }
   try {
     await sendToSite(r, qtyToSend);
@@ -1277,7 +1277,7 @@ function renderDiag() {
   if (unlockStatus) {
     unlockStatus.innerHTML = isUnlocked()
       ? '<b style="color:var(--good)">🔓 Sbloccato</b> — l\'app invia sempre, a qualsiasi ora/giorno'
-      : '🔒 Bloccato fuori da ven/sab/dom 9-23 — inserisci la password per sbloccare';
+      : '🔒 Bloccato fuori da ven/sab/dom 8-23 — inserisci la password per sbloccare';
   }
 }
 
