@@ -385,7 +385,7 @@ border-radius:12px;padding:10px 12px}
 <!-- Evento obbligatorio (se ce n'e' almeno uno disponibile oggi): niente "Annulla". -->
 <div class="modalOverlay" id="eventModal" hidden style="align-items:center;z-index:140">
   <div class="modalBox" style="border-radius:16px;margin:0 16px">
-    <div class="modalMsg"><b>A quale evento partecipi?</b></div>
+    <div class="modalMsg" id="eventModalMsg"><b>A quale evento partecipi?</b></div>
     <div id="eventModalList"></div>
     <div class="sheetBtns" id="eventModalCancelWrap" hidden><button class="btnCancel" id="eventModalCancel">Annulla</button></div>
   </div>
@@ -601,21 +601,24 @@ function applySessionLock() {
   document.getElementById("sessSave").style.display = locked ? "none" : "";
 }
 // change=true: aperta da Advanced > Cambia evento (si puo' annullare, mostra sempre la lista).
-function requireEvent(change) {
+// messageHtml: titolo diverso dal solito (es. vendita rifiutata dal sito per evento mancante).
+// Risolve con l'evento scelto, oppure null se non e' stato scelto niente.
+function requireEvent(change, messageHtml) {
   return new Promise((resolve) => {
     const avail = availableEvents();
-    if (change && !avail.length) { toast("Nessun evento disponibile oggi"); return resolve(); }
+    if (change === true && !avail.length) { toast("Nessun evento disponibile oggi"); return resolve(null); }
     if (!avail.length) {
       // Nessun evento oggi: se la sessione salvata era un evento ormai chiuso, torna al default.
       if (isEventName(SESSION)) setSession(todaySessionDefault());
       applySessionLock();
-      return resolve();
+      return resolve(null);
     }
-    if (!change && avail.some((ev) => ev.name === SESSION)) { applySessionLock(); return resolve(); }
+    if (change !== true && avail.some((ev) => ev.name === SESSION)) { applySessionLock(); return resolve(null); }
     const overlay = document.getElementById("eventModal");
     const cancelWrap = document.getElementById("eventModalCancelWrap");
-    cancelWrap.hidden = !change;
-    document.getElementById("eventModalCancel").onclick = () => { overlay.hidden = true; resolve(); };
+    document.getElementById("eventModalMsg").innerHTML = messageHtml || "<b>A quale evento partecipi?</b>";
+    cancelWrap.hidden = change !== true;
+    document.getElementById("eventModalCancel").onclick = () => { overlay.hidden = true; resolve(null); };
     const list = document.getElementById("eventModalList");
     list.innerHTML = avail.map((ev, i) =>
       `<button class="${!change || ev.name === SESSION ? "btnAdd" : "btnCancel"}" data-i="${i}" style="width:100%;min-height:52px;border:none;border-radius:12px;font-size:16px;font-weight:600;margin-bottom:8px;line-height:1.25">${escapeHtml(ev.name)}<br><span style="font-size:13px;font-weight:500">${escapeHtml(localDay(ev.date, 0).toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</span></button>`).join("");
@@ -628,7 +631,7 @@ function requireEvent(change) {
       if (typeof renderRows === "function") renderRows();
       if (document.getElementById("sessionsView").classList.contains("active")) renderSessions();
       toast("Evento: " + ev.name);
-      resolve();
+      resolve(ev);
     }));
     overlay.hidden = false;
   });
@@ -682,7 +685,13 @@ async function sendToSite(row, quantity) {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || ("http " + r.status));
   const ok = data.upstream_status >= 200 && data.upstream_status < 300;
-  if (!ok) throw new Error("sito: " + data.upstream_status + " " + (data.upstream_body || ""));
+  if (!ok) {
+    const err = new Error("sito: " + data.upstream_status + " " + (data.upstream_body || ""));
+    // 4xx = il sito ha RIFIUTATO questa vendita (codice non trovato, evento mancante...):
+    // rimandarla da sola non cambia niente, la riga esce dalla coda automatica.
+    if (data.upstream_status >= 400 && data.upstream_status < 500) err.rejected = true;
+    throw err;
+  }
   return data;
 }
 
@@ -1369,12 +1378,19 @@ document.getElementById("mpNext").addEventListener("click", async () => {
   }
 });
 // Invio in sequenza (mai in parallelo: stesso blocco per riga di trySendRow), un solo esito finale.
-async function sendMany(rows) {
+async function sendMany(rows, askEvent = true) {
   let ok = 0, queued = 0, failed = 0;
+  const noEvent = [];
   for (const row of rows) {
     if (!relayConfigured() && !row.test) { failed++; continue; }
     const res = await trySendRow(row.clientId);
     if (res.ok) ok++; else if (res.queued) queued++; else failed++;
+    if (res.needsEvent) noEvent.push(row.clientId);
+  }
+  if (noEvent.length && askEvent) {
+    if (ok) toast(`Scaricate ${ok}/${rows.length}`);
+    await askEventAndResend(noEvent);
+    return;
   }
   if (!relayConfigured()) updateRelayBanner();
   const n = rows.length;
@@ -1382,6 +1398,39 @@ async function sendMany(rows) {
   else if (queued && !failed) showSendResult(false, `IN CODA ${queued}/${n}\n(fuori orario)`);
   else showSendResult(false, `SCARICATE ${ok}/${n}` + (failed ? `\n${failed} non scaricate` : "") + (queued ? `\n${queued} in coda` : ""));
   if (document.getElementById("listView").classList.contains("active")) renderRows();
+}
+
+/* Il sito ha rifiutato la vendita perche' manca l'evento: l'operatore sceglie l'evento, le
+   righe vengono spostate su quell'evento e si riscaricano subito. Una sola richiesta per giro:
+   se il sito rifiuta ancora, la riga resta in Sessione col bottone "Scegli evento". */
+async function askEventAndResend(clientIds) {
+  if (!document.getElementById("eventModal").hidden) return; // gia' aperta
+  await refreshEvents();
+  if (!availableEvents().length) {
+    showSendResult(false, "NON SCARICATA\nnessun evento disponibile");
+    return;
+  }
+  const n = clientIds.length;
+  const ev = await requireEvent(true,
+    `<b>${n > 1 ? n + " carte non scaricate" : "Carta NON scaricata"}: manca l'evento.</b><br>Scegli l'evento, e riscarica la carta.`);
+  if (!ev) {
+    showSendResult(false, "NON SCARICATA\nevento non scelto");
+    if (document.getElementById("listView").classList.contains("active")) renderRows();
+    return;
+  }
+  const rows = [];
+  for (const id of clientIds) {
+    const r = await idbGet("rows", id);
+    if (!r) continue;
+    r.eventId = ev.id;
+    r.session = ev.name;
+    r.rejected = false;
+    r.lastError = null;
+    r.updatedAt = nowIso();
+    await idbPut("rows", r);
+    rows.push(r);
+  }
+  if (rows.length) await sendMany(rows, false);
 }
 
 /* Invio al sito: SEMPRE automatico, mai un bottone/conferma separati.
@@ -1393,6 +1442,11 @@ async function sendMany(rows) {
 // stessa riga in parallelo (sarebbe uno scarico doppio). Dentro il blocco la riga viene riletta
 // dal DB, cosi' sentQty e' sempre quello aggiornato e non quello di una copia vecchia.
 const sendLocks = new Set();
+// Rifiutata dal sito (4xx): non si ritenta piu' in automatico, solo a mano ("Riprova").
+// Le righe salvate prima di questo flag si riconoscono dal testo dell'errore.
+function isRejected(r) { return !!r.rejected || /^sito: 4\d\d/.test(r.lastError || ""); }
+// Rifiutata perche' manca l'evento: si chiede all'operatore di sceglierlo e si riscarica.
+function needsEvent(r) { return isRejected(r) && /idEvento/i.test(r.lastError || ""); }
 async function trySendRow(rowOrId) {
   const id = typeof rowOrId === "string" ? rowOrId : rowOrId.clientId;
   if (sendLocks.has(id)) return { ok: false, busy: true, error: "invio gia' in corso" };
@@ -1431,6 +1485,7 @@ async function trySendRowLocked(r) {
     await sendToSite(r, qtyToSend);
     r.sentQty = r.qty;
     r.lastError = null;
+    r.rejected = false;
     await idbPut("rows", r);
     return { ok: true };
   } catch (e) {
@@ -1438,9 +1493,10 @@ async function trySendRowLocked(r) {
     // problema di rete: salvo il motivo vero sulla riga invece di dire genericamente
     // "offline", cosi' si vede subito nella lista cosa e' andato storto e perche'.
     r.lastError = e.message;
+    r.rejected = !!e.rejected;
     await idbPut("rows", r);
     sendDebug({ type: "sendError", code: r.code, message: e.message });
-    return { ok: false, error: e.message };
+    return { ok: false, error: e.message, needsEvent: needsEvent(r) };
   }
 }
 
@@ -1454,6 +1510,7 @@ async function autoSendRow(clientId) {
   }
   const res = await trySendRow(clientId);
   if (res.busy) return;
+  if (res.needsEvent) { await askEventAndResend([clientId]); return; }
   const okText = (r.kind === "photo" ? "INVIATA" : "SCARICATA") + (r.test ? "\n(PROVA, niente al sito)" : "");
   if (res.ok) showSendResult(true, okText);
   else if (res.queued) showSendResult(false, "IN CODA\n(fuori orario)");
@@ -1467,14 +1524,23 @@ async function retryPendingSends() {
   retryInFlight = true;
   try {
     const all = await idbGetAll("rows");
-    const pending = all.filter((r) => isSendable(r) && r.qty - (r.sentQty || 0) > 0);
+    // Solo la sessione (evento) in corso e solo errori temporanei (rete, timeout, sito giu'):
+    // le righe che il sito ha rifiutato o di eventi passati si rimandano solo a mano.
+    const pending = all.filter((r) => isSendable(r) && r.qty - (r.sentQty || 0) > 0
+      && r.session === SESSION && !isRejected(r));
     if (!pending.length) return;
     let ok = 0;
-    for (const r of pending) { if ((await trySendRow(r)).ok) ok++; }
+    const noEvent = [];
+    for (const r of pending) {
+      const res = await trySendRow(r);
+      if (res.ok) ok++;
+      if (res.needsEvent) noEvent.push(r.clientId);
+    }
     if (ok) {
       toast(`✔ Inviate ${ok} carte in coda`);
       renderRows();
     }
+    if (noEvent.length) await askEventAndResend(noEvent);
   } finally {
     retryInFlight = false;
   }
@@ -1496,6 +1562,10 @@ async function addScan(code, qty, payment, price, payments) {
 }
 
 /* ---------- vista Sessione: elenco righe ---------- */
+function sendBtn(r) {
+  if (needsEvent(r)) return '<button class="sendNow" data-ev="1">Scegli evento</button>';
+  return `<button class="sendNow">${isRejected(r) ? "Riprova" : "Invia ora"}</button>`;
+}
 async function renderRows() {
   const all = await idbGetAll("rows");
   const rows = all.filter((r) => r.session === SESSION).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -1515,14 +1585,14 @@ async function renderRows() {
         <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
         ${!isSendable(r) ? '<span class="syncTag">solo locale</span>'
           : r.qty - (r.sentQty || 0) <= 0 ? '<span class="syncTag ok">✔ inviato</span>'
-          : `<span class="syncTag pending">${r.qty - (r.sentQty || 0)} da inviare${r.lastError ? " ⚠️" : ""}</span><button class="sendNow">Invia ora</button>`}
+          : `<span class="syncTag pending">${r.qty - (r.sentQty || 0)} ${isRejected(r) ? "rifiutata dal sito" : "da inviare"}${r.lastError ? " ⚠️" : ""}</span>${sendBtn(r)}`}
       </div>
       ${r.lastError ? `<div class="rSub" style="color:var(--bad)">${escapeHtml(r.lastError)}</div>` : ""}
     </div>`;
     const pending = Math.max(0, r.qty - (r.sentQty || 0));
     const errTitle = r.lastError ? ` title="${escapeHtml(r.lastError)}"` : "";
     const siteTag = pending === 0 && (r.sentQty || 0) > 0 ? '<span class="syncTag ok">✔ inviato</span>'
-      : pending > 0 ? `<span class="syncTag pending"${errTitle}>${pending} da inviare${r.lastError ? " ⚠️" : ""}</span>` : "";
+      : pending > 0 ? `<span class="syncTag pending"${errTitle}>${pending} ${isRejected(r) ? "rifiutata dal sito" : "da inviare"}${r.lastError ? " ⚠️" : ""}</span>` : "";
     return `<div class="row" data-id="${r.clientId}">
       <div class="rTop">
         <div class="rName">${escapeHtml(r.code)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(paymentsText(r))}</span>` : ""}${testTag(r)}</div>
@@ -1532,7 +1602,7 @@ async function renderRows() {
       <div class="rBottom">
         <div class="rQty"><button class="rMinus" aria-label="Diminuisci quantità di ${escapeHtml(r.code)}">−</button><span class="n">${r.qty}</span><button class="rPlus" aria-label="Aumenta quantità di ${escapeHtml(r.code)}">+</button></div>
         <span class="syncTag ${r.exported ? "ok" : "pending"}">${r.exported ? "✔ esportato" : "da esportare"}</span>
-        ${siteTag}${pending > 0 ? '<button class="sendNow">Invia ora</button>' : ""}
+        ${siteTag}${pending > 0 ? sendBtn(r) : ""}
       </div>
     </div>`;
   }).join("");
@@ -1544,7 +1614,8 @@ async function renderRows() {
     const sn = el.querySelector(".sendNow");
     if (sn) sn.addEventListener("click", async () => {
       sn.disabled = true; sn.textContent = "Invio…";
-      await autoSendRow(cid);
+      if (sn.dataset.ev) await askEventAndResend([cid]);
+      else await autoSendRow(cid);
       renderRows();
     });
   });
