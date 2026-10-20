@@ -840,6 +840,9 @@ document.addEventListener("visibilitychange", () => {
   else restartCamera("visible");
 });
 window.addEventListener("pageshow", (e) => { if (e.persisted) restartCamera("pageshow"); });
+// Chrome Android: la pagina in secondo piano puo' essere "congelata" e poi ripresa senza un
+// cambio di visibilita' affidabile; al "resume" si ricontrolla subito la fotocamera.
+document.addEventListener("resume", () => restartCamera("resume"));
 document.getElementById("camRestart").addEventListener("click", () => { camDenied = false; restartCamera("manual"); });
 
 async function initOcr() {
