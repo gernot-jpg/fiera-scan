@@ -80,7 +80,7 @@ html.kbOpen #cfPhotoBlock img{max-height:56px}
 .sheet.photo #cfPhotoBlock{display:block}
 .sheet.photo #cfCodeBlock{display:none}
 #cfAddPay{display:none;width:100%;margin-top:8px;min-height:42px;border-radius:10px;border:1px dashed var(--line);background:transparent;color:var(--fg);font-size:14px;font-weight:600}
-.sheet.trade #cfAddPay{display:block}
+.sheet.price #cfAddPay,.sheet.photo #cfAddPay{display:block}
 .payLine{display:flex;gap:6px;margin-top:8px;align-items:stretch}
 .payLine .codeInput{flex:1;min-width:0;margin:0}
 .payLine button{border:1px solid var(--line);background:var(--panel2);color:var(--fg);border-radius:10px;padding:0 10px;font-size:14px;font-weight:600}
@@ -92,8 +92,8 @@ html.kbOpen #cfPhotoBlock img{max-height:56px}
 .sheet.show #cfX{display:block}
 /* Passo prezzo e vendita foto (non Trade): al posto di Annulla il tipo di pagamento, cambiabile. */
 #cfPayBtn{display:none}
-.sheet.price:not(.trade) #cfPayBtn,.sheet.photo:not(.trade) #cfPayBtn{display:block}
-.sheet.price:not(.trade) #cfCancel,.sheet.photo:not(.trade) #cfCancel{display:none}
+.sheet.price #cfPayBtn,.sheet.photo #cfPayBtn{display:block}
+.sheet.price #cfCancel,.sheet.photo #cfCancel{display:none}
 #cfMulti{display:none}
 .sheet.step1 #cfMulti{display:block}
 .sheet.step1 #cfCancel{display:none}
@@ -163,6 +163,7 @@ padding:10px 12px;margin-bottom:8px}
 .rDel{background:none;border:none;color:var(--bad);font-size:20px;padding:8px;flex-shrink:0;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center}
 .sendNow{background:var(--accent2);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;padding:8px 12px;min-height:36px;flex-shrink:0}
 .sendNow:disabled{opacity:.5}
+.rGame{background:none;border:none;border-bottom:1px dashed var(--dim);color:inherit;font:inherit;padding:0;cursor:pointer}
 .zoomable{cursor:zoom-in}
 #photoZoom{align-items:center;z-index:160}
 #photoZoom img{max-width:92vw;max-height:72vh;border-radius:12px;border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.6)}
@@ -202,6 +203,7 @@ border-radius:12px;padding:10px 12px}
     <div class="modeTitle">📸 Vendita senza codice</div>
     <div class="camControls">
       <button class="roundBtn" id="torchBtn" title="Torcia" aria-label="Torcia">🔦</button>
+      <button class="roundBtn" id="camRestart" title="Riavvia fotocamera" aria-label="Riavvia fotocamera">🔄</button>
     </div>
     <div class="hint" id="camHint">Allinea il numero sull'etichetta nel riquadro, poi premi 📷</div>
     <button id="captureBtn" class="captureBtn" title="Leggi codice" aria-label="Leggi codice">📷</button>
@@ -222,7 +224,7 @@ border-radius:12px;padding:10px 12px}
       <div id="cfPriceBlock">
         <label class="ocrLabel" for="cfPrice" id="cfPriceLabel" style="margin-top:10px">Valore d'acquisto (€)</label>
         <input id="cfPrice" class="codeInput" inputmode="decimal" placeholder="Es. 12,50" autocomplete="off">
-        <!-- Solo con Trade: altri pagamenti della stessa vendita (es. Trade 300 + Contanti 100) -->
+        <!-- Altri pagamenti della stessa vendita (es. Contanti 100 + Trade 300) -->
         <div id="cfExtraPays"></div>
         <div id="cfPayTotal"></div>
         <button id="cfAddPay" type="button">+ Aggiungi pagamento</button>
@@ -489,6 +491,9 @@ function renderGameBtn() { document.getElementById("gameOpen").textContent = "�
 document.getElementById("gameOpen").addEventListener("click", () => {
   openChoiceMenu("Gioco", GAMES, GAME, (g) => { GAME = g; localStorage.setItem("fs_game", GAME); renderGameBtn(); });
 });
+function camHintText() {
+  return MODE === "photo" ? "Inquadra la carta nel riquadro, poi premi 📷" : "Allinea il numero sull'etichetta nel riquadro, poi premi 📷";
+}
 function setMode(m) {
   if (m === MODE || document.getElementById("confirmSheet").classList.contains("show")) return;
   MODE = m;
@@ -497,9 +502,7 @@ function setMode(m) {
   const arrow = document.getElementById("modeArrow");
   arrow.textContent = photo ? "›" : "‹";
   arrow.setAttribute("aria-label", photo ? "Torna alla scansione codice" : "Vendita senza codice");
-  document.getElementById("camHint").textContent = photo
-    ? "Inquadra la carta nel riquadro, poi premi 📷"
-    : "Allinea il numero sull'etichetta nel riquadro, poi premi 📷";
+  document.getElementById("camHint").textContent = camHintText();
   renderPayBar();
 }
 document.getElementById("modeArrow").addEventListener("click", () => setMode(MODE === "photo" ? "code" : "photo"));
@@ -788,7 +791,56 @@ async function startCamera() {
   const track = stream.getVideoTracks()[0];
   const caps = track.getCapabilities ? track.getCapabilities() : {};
   document.getElementById("torchBtn").style.display = caps.torch ? "flex" : "none";
+  document.getElementById("torchBtn").classList.remove("on");
+  // iOS puo' chiudere la fotocamera da solo (blocco schermo, altra app): si riapre subito.
+  track.addEventListener("ended", () => { if (document.visibilityState === "visible") restartCamera("ended"); });
 }
+
+/* Failsafe fotocamera (iOS PWA): uscendo sulla Home e bloccando il telefono, al rientro il
+   video restava fermo sull'ultimo fotogramma. Rimedi, dal piu' frequente al piu' raro:
+   1. app nascosta -> la fotocamera si spegne; app visibile -> si riaccende da zero;
+   2. controllo ogni 2s: traccia chiusa, video in pausa o immagine ferma da ~4s -> riavvio;
+   3. bottone 🔄 per riavviarla a mano. */
+let camEnabled = false; // diventa true all'avvio, prima nessun controllo
+let camRestarting = false, camLastTime = -1, camStillTicks = 0, camDenied = false;
+async function restartCamera(reason) {
+  if (!camEnabled || camRestarting || document.visibilityState !== "visible") return;
+  camRestarting = true;
+  sendDebug({ type: "cameraRestart", reason });
+  try {
+    stopCamera();
+    stream = null;
+    video.srcObject = null;
+    await startCamera();
+    camDenied = false;
+    camLastTime = -1; camStillTicks = 0;
+    const hint = document.getElementById("camHint");
+    if (/^Fotocamera/.test(hint.textContent)) hint.textContent = camHintText();
+  } catch (e) {
+    camDenied = e.name === "NotAllowedError";
+    document.getElementById("camHint").textContent = "Fotocamera non disponibile: " + e.message + " — tocca 🔄";
+  } finally {
+    camRestarting = false;
+  }
+}
+function cameraLooksStuck() {
+  const track = stream && stream.getVideoTracks()[0];
+  if (!track || track.readyState === "ended") return true;
+  if (video.paused || video.readyState < 2) return true;
+  if (video.currentTime === camLastTime) camStillTicks++; else camStillTicks = 0;
+  camLastTime = video.currentTime;
+  return camStillTicks >= 2;
+}
+setInterval(() => {
+  if (document.visibilityState !== "visible" || camRestarting || camDenied) return;
+  if (cameraLooksStuck()) restartCamera("watchdog");
+}, 2000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { stopCamera(); stream = null; }
+  else restartCamera("visible");
+});
+window.addEventListener("pageshow", (e) => { if (e.persisted) restartCamera("pageshow"); });
+document.getElementById("camRestart").addEventListener("click", () => { camDenied = false; restartCamera("manual"); });
 
 async function initOcr() {
   sendDebug({ type: "ocrInitStart" });
@@ -1086,9 +1138,9 @@ function readPriceInput(what) {
   if (!/^\d+(\.\d{1,2})?$/.test(raw)) { toast("Valore non valido, es. 12,50"); el.focus(); return null; }
   return Number(raw);
 }
-/* ---------- piu' pagamenti sulla stessa vendita (solo Trade) ----------
-   Es. carta da 400 €: Trade 300 + Contanti 100. Prima riga = cfPrice (tipo = pagamento
-   selezionato, cioe' Trade), "+ Aggiungi pagamento" aggiunge righe Importo + Tipo. Al sito va
+/* ---------- piu' pagamenti sulla stessa vendita (qualsiasi tipo) ----------
+   Es. carta da 400 €: Contanti 100 + Trade 300. Prima riga = cfPrice (tipo = pagamento
+   selezionato), "+ Aggiungi pagamento" aggiunge righe Importo + Tipo. Al sito va
    una sola vendita con Price = totale, payments = lista e PaymentType 0 (formato del
    programmatore). Con piu' pagamenti la quantita' e' sempre 1 (Price = totale, nessuna ambiguita'). */
 const extraPayLines = () => [...document.querySelectorAll("#cfExtraPays .payLine")];
@@ -1107,7 +1159,11 @@ function updatePayTotal() {
   const lines = extraPayLines();
   const tot = document.getElementById("cfPayTotal");
   const label = document.getElementById("cfPriceLabel");
-  if (!lines.length) { tot.style.display = "none"; return; }
+  if (!lines.length) {
+    tot.style.display = "none";
+    label.textContent = pending && pending.kind === "photo" ? "Valore d'acquisto (€ al pezzo)" : "Prezzo di vendita (€ al pezzo)";
+    return;
+  }
   label.textContent = "Importo " + pending.payment + " (€)";
   const sum = [document.getElementById("cfPrice").value, ...lines.map((l) => l.querySelector("input").value)]
     .map(parseAmount).reduce((a, b) => a + (b || 0), 0);
@@ -1124,13 +1180,15 @@ document.getElementById("cfPayBtn").addEventListener("click", () => {
     localStorage.setItem("fs_payment", PAYMENT);
     renderPayBar();
     document.getElementById("cfPay").textContent = p;
-    resetExtraPays(); // passando a Trade compare "+ Aggiungi pagamento"
+    document.getElementById("cfPayBtn").textContent = "💳 " + p;
+    document.getElementById("confirmSheet").classList.toggle("trade", p === "Trade");
+    if (extraPayLines().length) updatePayTotal(); // le righe gia' aggiunte restano
     document.getElementById("cfPrice").focus({ preventScroll: true });
   });
 });
 document.getElementById("cfAddPay").addEventListener("click", () => {
   if (!pending) return;
-  openChoiceMenu("Altro pagamento", PAYMENTS.filter((p) => p !== "Trade"), "", (payment) => {
+  openChoiceMenu("Altro pagamento", PAYMENTS.filter((p) => p !== pending.payment), "", (payment) => {
     if (pending.qty > 1) {
       pending.qty = 1;
       document.getElementById("qtyVal").textContent = 1;
@@ -1144,7 +1202,7 @@ document.getElementById("cfAddPay").addEventListener("click", () => {
       <button type="button" class="plDel" aria-label="Togli pagamento">✕</button>`;
     line.querySelector("input").addEventListener("input", updatePayTotal);
     line.querySelector(".plType").addEventListener("click", () => {
-      openChoiceMenu("Tipo di pagamento", PAYMENTS.filter((p) => p !== "Trade"), line.dataset.payment, (p) => {
+      openChoiceMenu("Tipo di pagamento", PAYMENTS.filter((p) => p !== pending.payment), line.dataset.payment, (p) => {
         line.dataset.payment = p;
         line.querySelector(".plType").textContent = p;
         line.querySelector("input").placeholder = "Importo " + p;
@@ -1577,7 +1635,7 @@ async function renderRows() {
     if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}">
       <div class="rTop" style="gap:10px">
         ${r.photo ? `<img class="rThumb zoomable" src="${escapeHtml(r.photo)}" alt="Foto della carta">` : ""}
-        <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · ${escapeHtml(r.game)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(paymentsText(r))}</span>` : ""}${testTag(r)}</div>
+        <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · <button class="rGame" aria-label="Cambia gioco">${escapeHtml(r.game)} ✎</button>${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(paymentsText(r))}</span>` : ""}${testTag(r)}</div>
         <button class="rDel" aria-label="Elimina vendita senza codice">✕</button>
       </div>
       <div class="rBottom">
@@ -1611,6 +1669,8 @@ async function renderRows() {
     el.querySelector(".rPlus").addEventListener("click", () => bumpRow(cid, 1));
     el.querySelector(".rMinus").addEventListener("click", () => bumpRow(cid, -1));
     el.querySelector(".rDel").addEventListener("click", () => deleteRow(cid));
+    const gb = el.querySelector(".rGame");
+    if (gb) gb.addEventListener("click", () => changeRowGame(cid));
     const sn = el.querySelector(".sendNow");
     if (sn) sn.addEventListener("click", async () => {
       sn.disabled = true; sn.textContent = "Invio…";
@@ -1618,6 +1678,23 @@ async function renderRows() {
       else await autoSendRow(cid);
       renderRows();
     });
+  });
+}
+// Corregge il gioco di una vendita senza codice SOLO sul telefono (Sessione + CSV): non
+// rimanda niente al sito. Se la riga non e' ancora partita, partira' col gioco nuovo.
+async function changeRowGame(clientId) {
+  const r = await idbGet("rows", clientId);
+  if (!r) return;
+  openChoiceMenu("Gioco", GAMES, r.game, async (g) => {
+    if (g === r.game) return;
+    const fresh = await idbGet("rows", clientId);
+    if (!fresh) return;
+    fresh.game = g;
+    fresh.exported = false; // il CSV va riesportato col gioco giusto
+    if (fresh.lastError && /prefisso/.test(fresh.lastError)) fresh.lastError = null;
+    await idbPut("rows", fresh);
+    toast((fresh.sentQty || 0) > 0 ? "Gioco corretto sul telefono (non reinviato al sito)" : "Gioco: " + g);
+    renderRows();
   });
 }
 async function bumpRow(clientId, delta) {
@@ -1830,7 +1907,7 @@ document.getElementById("photoZoom").addEventListener("click", (e) => { e.curren
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   if (navigator.onLine) retryPendingSends(); // recupera in automatico eventuali code rimaste da prima
   initOcr(); // in parallelo alla fotocamera, cosi' e' pronto entro la prima cattura
-  try { await startCamera(); }
-  catch (e) { document.getElementById("camHint").textContent = "Fotocamera non disponibile: " + e.message; }
+  camEnabled = true;
+  await restartCamera("init");
 })();
 </script>
