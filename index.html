@@ -512,6 +512,7 @@ function camHintText() {
 }
 function setMode(m) {
   if (m === MODE || document.getElementById("confirmSheet").classList.contains("show")) return;
+  if (camSleeping) wakeAutoScan(); // la modalita' foto ha bisogno della fotocamera accesa
   MODE = m;
   const photo = MODE === "photo";
   document.getElementById("scanView").classList.toggle("photoMode", photo);
@@ -782,6 +783,7 @@ function customConfirm(message, yesLabel = "Conferma", noLabel = "Annulla") {
 
 /* ---------- tabs ---------- */
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+  if (b.dataset.view === "scanView" && camSleeping) wakeAutoScan();
   document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
   document.querySelectorAll(".view").forEach((x) => x.classList.remove("active"));
   b.classList.add("active");
@@ -819,8 +821,9 @@ async function startCamera() {
    3. bottone 🔄 per riavviarla a mano. */
 let camEnabled = false; // diventa true all'avvio, prima nessun controllo
 let camRestarting = false, camLastTime = -1, camStillTicks = 0, camDenied = false;
+let camSleeping = false; // fotocamera spenta dallo standby della lettura automatica
 async function restartCamera(reason) {
-  if (!camEnabled || camRestarting || document.visibilityState !== "visible") return;
+  if (!camEnabled || camSleeping || camRestarting || document.visibilityState !== "visible") return;
   camRestarting = true;
   sendDebug({ type: "cameraRestart", reason });
   try {
@@ -848,11 +851,12 @@ function cameraLooksStuck() {
   return camStillTicks >= 2;
 }
 setInterval(() => {
-  if (document.visibilityState !== "visible" || camRestarting || camDenied) return;
+  if (document.visibilityState !== "visible" || camRestarting || camDenied || camSleeping) return;
   if (cameraLooksStuck()) restartCamera("watchdog");
 }, 2000);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") { stopCamera(); stream = null; }
+  else if (camSleeping) wakeAutoScan(); // rientro nell'app = si torna a scansionare
   else restartCamera("visible");
 });
 window.addEventListener("pageshow", (e) => { if (e.persisted) restartCamera("pageshow"); });
@@ -1250,19 +1254,29 @@ function acceptCode(code, info) {
   showConfirmSheet();
 }
 /* Standby: se la lettura automatica gira AUTO_IDLE_MS senza riconoscere nessun codice si
-   ferma (batteria/calore del telefono). Riparte col bottone "▶ Riprendi lettura", con 📷, o da
+   ferma e spegne anche la fotocamera (batteria/calore del telefono). Riparte col bottone "▶ Riprendi lettura", con 📷, o da
    sola quando si torna a scansionare (chiusa la conferma, rientro nell'app o nella schermata). */
 const AUTO_IDLE_MS = 10000;
-let autoIdle = false, autoActiveSince = 0, wasScanning = false;
+let autoIdle = false, autoActiveSince = 0, wasScanning = false, camWake = Promise.resolve();
 function setAutoIdle(idle) {
   autoIdle = idle;
+  if (idle && !camSleeping) {
+    camSleeping = true;
+    stopCamera();
+    stream = null;
+  } else if (!idle && camSleeping) {
+    camSleeping = false;
+    camWake = restartCamera("wake").then(() => new Promise((r) => setTimeout(r, 600))); // esposizione/fuoco
+  }
   document.getElementById("autoWake").hidden = !idle;
   document.getElementById("scanView").classList.toggle("autoIdle", idle);
   if (MODE === "code") document.getElementById("camHint").textContent = camHintText();
 }
+// ritorna una promessa risolta quando la fotocamera e' di nuovo pronta (se era spenta)
 function wakeAutoScan() {
   autoActiveSince = Date.now();
   if (autoIdle) setAutoIdle(false);
+  return camWake;
 }
 document.getElementById("autoWake").addEventListener("click", wakeAutoScan);
 async function autoScanLoop() {
@@ -1315,11 +1329,11 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
   }
   if (!ocrReady || !ocrWorker) { toast("OCR ancora in caricamento, attendi un attimo…"); return; }
   if (!PAYMENT) { openPayMenu(); return; }
-  wakeAutoScan();
   manualBusy = true;
   const btn = document.getElementById("captureBtn");
   btn.textContent = "⏳";
   try {
+    await wakeAutoScan(); // in standby la fotocamera e' spenta: si riaccende prima di leggere
     // raffica di fotogrammi: ci si ferma appena il voto conferma un codice (le letture
     // automatiche degli ultimi istanti contano anche loro)
     const reads = [];
