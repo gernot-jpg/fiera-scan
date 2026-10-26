@@ -1,4 +1,4 @@
-const CACHE = "fiera-scan-v15";
+const CACHE = "fiera-scan-v16";
 // Base = cartella dove vive questo sw.js (es. "/" a radice, o "/fiera-scan/" su GitHub Pages
 // project page) — calcolata dal proprio URL cosi' funziona a qualunque profondita', senza
 // dover sapere in anticipo dove verra' pubblicata l'app.
@@ -11,7 +11,7 @@ const BASE = self.location.pathname.replace(/sw\.js$/, "");
 const HEAVY = [BASE + "icons/icon-192.png", BASE + "icons/icon-512.png", BASE + "icons/apple-touch-icon.png",
   BASE + "vendor/tesseract/tesseract.min.js", BASE + "vendor/tesseract/worker.min.js",
   BASE + "vendor/tesseract/tesseract-core-lstm.js", BASE + "vendor/tesseract/tesseract-core-lstm.wasm",
-  BASE + "vendor/tesseract/eng.traineddata.gz"];
+  BASE + "vendor/tesseract/eng.traineddata.gz", BASE + "vendor/zxing/zxing-reader.js", BASE + "vendor/zxing/zxing_reader.wasm"];
 const SHELL = [BASE, BASE + "index.html", BASE + "manifest.json"];
 
 self.addEventListener("install", (e) => {

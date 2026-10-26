@@ -272,6 +272,11 @@ border-radius:12px;padding:10px 12px}
         <button id="eventChange" class="pill" style="min-height:44px">Cambia evento</button>
       </div>
     </div>
+    <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
+      border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
+      <input type="checkbox" id="autoScanToggle" style="width:22px;height:22px">
+      <span>Lettura automatica del codice<br><span style="font-size:12px;color:var(--dim)">spenta = si legge solo premendo 📷</span></span>
+    </label>
     <div id="diagBox" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;
       padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.6;word-break:break-all;color:var(--dim)"></div>
     <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px">
@@ -394,6 +399,7 @@ border-radius:12px;padding:10px 12px}
 </div>
 
 <script src="vendor/tesseract/tesseract.min.js"></script>
+<script src="vendor/zxing/zxing-reader.js"></script>
 <script>
 /* App 100% locale: nessun server, nessuna rete richiesta per scansionare/salvare/esportare.
    sendDebug logga in console (utile con Safari Web Inspector collegato via cavo), non manda
@@ -492,7 +498,9 @@ document.getElementById("gameOpen").addEventListener("click", () => {
   openChoiceMenu("Gioco", GAMES, GAME, (g) => { GAME = g; localStorage.setItem("fs_game", GAME); renderGameBtn(); });
 });
 function camHintText() {
-  return MODE === "photo" ? "Inquadra la carta nel riquadro, poi premi 📷" : "Allinea il numero sull'etichetta nel riquadro, poi premi 📷";
+  if (MODE === "photo") return "Inquadra la carta nel riquadro, poi premi 📷";
+  return autoScan ? "Inquadra il numero dell'etichetta vicino al riquadro: si legge da solo (o premi 📷)"
+    : "Allinea il numero sull'etichetta nel riquadro, poi premi 📷";
 }
 function setMode(m) {
   if (m === MODE || document.getElementById("confirmSheet").classList.contains("show")) return;
@@ -785,7 +793,7 @@ const video = document.getElementById("video");
 
 
 async function startCamera() {
-  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } } });
+  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 } } });
   video.srcObject = stream;
   await video.play();
   const track = stream.getVideoTracks()[0];
@@ -866,9 +874,14 @@ async function initOcr() {
       logger: (m) => sendDebug({ type: "ocrProgress", status: m.status, progress: m.progress }),
     });
     clearTimeout(timeoutId);
-    // riga singola, alfanumerico + punto/trattino: basta per un codice tipo "MTG-261.417"
+    // PSM 11 = testo sparso: trova il codice ovunque sia nella fascia letta (prima PSM 7 =
+    // "l'immagine e' una sola riga", che falliva appena entrava altro testo o il codice era
+    // fuori centro). Alfanumerico + punto/trattino: basta per un codice tipo "MTG-261.417".
+    // tessedit_do_invert=0: niente secondo tentativo automatico in negativo (lento, e le
+    // etichette sono scure su chiaro).
     await ocrWorker.setParameters({
-      tessedit_pageseg_mode: "7",
+      tessedit_pageseg_mode: "11",
+      tessedit_do_invert: "0",
       tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ.-",
     });
     ocrReady = true;
@@ -921,59 +934,76 @@ function otsuThreshold(gray) {
   return thresh;
 }
 
-/* Ritaglia il riquadro guida dal frame video corrente, lo scala 4x (stessa risoluzione usata
-   da mtg-scanner/recognizer.py) e produce ENTRAMBE le varianti binarizzate (normale e
-   invertita) — mtg-scanner fa lo stesso per gestire sia testo scuro su sfondo chiaro sia il
-   contrario, e si sceglie il risultato con confidenza OCR piu' alta.
+/* Zona letta dall'OCR: NON piu' solo il riquadro guida (se il codice ne usciva anche di poco
+   veniva tagliato prima ancora di arrivare all'OCR), ma una fascia larga quanto tutto lo
+   schermo e alta BAND_HEIGHT volte il riquadro, centrata sul riquadro. Tesseract in modalita'
+   "testo sparso" (PSM 11) trova poi la riga ovunque sia nella fascia.
    Il video e' renderizzato con object-fit:cover: la mappatura tiene conto del crop/scala
-   che il browser applica per riempire il riquadro con l'immagine nativa della fotocamera. */
-function captureGuideCrop() {
-  const boxRect = document.querySelector(".guide .box").getBoundingClientRect();
+   che il browser applica per riempire lo schermo con l'immagine nativa della fotocamera. */
+const BAND_HEIGHT = 4;
+function visibleVideoRect() {
   const wrapRect = document.querySelector(".camWrap").getBoundingClientRect();
   const vw = video.videoWidth, vh = video.videoHeight;
   const scale = Math.max(wrapRect.width / vw, wrapRect.height / vh);
   const offX = (wrapRect.width - vw * scale) / 2, offY = (wrapRect.height - vh * scale) / 2;
-  const bx = (boxRect.left - wrapRect.left - offX) / scale;
-  let by = (boxRect.top - wrapRect.top - offY) / scale;
-  let bh = boxRect.height / scale;
-  const bw = boxRect.width / scale;
-  // margine verticale ridotto: se l'utente allinea con un po' di gioco, il riquadro pieno
-  // rischia di prendere anche un pezzo della riga sopra/sotto sull'etichetta (visto in test:
-  // un carattere spurio in coda, es. "MTG-261.417" letto come "MTG-261.417J").
-  const VERT_INSET = 0.16;
-  const trim = bh * VERT_INSET;
-  by += trim; bh -= trim * 2;
+  return {
+    x: Math.max(0, -offX / scale), y: Math.max(0, -offY / scale),
+    w: Math.min(vw, wrapRect.width / scale), h: Math.min(vh, wrapRect.height / scale),
+    scale, offY, wrapTop: wrapRect.top,
+  };
+}
+function guideBandRect() {
+  const vis = visibleVideoRect();
+  const boxRect = document.querySelector(".guide .box").getBoundingClientRect();
+  const boxH = boxRect.height / vis.scale;
+  const cy = (boxRect.top + boxRect.height / 2 - vis.wrapTop - vis.offY) / vis.scale;
+  let y = cy - boxH * BAND_HEIGHT / 2, h = boxH * BAND_HEIGHT;
+  if (y < 0) { h += y; y = 0; }
+  if (y + h > video.videoHeight) h = video.videoHeight - y;
+  return { x: vis.x, y, w: vis.w, h, boxH };
+}
 
-  const SCALE_UP = 4;
-  const w = Math.max(1, Math.round(bw * SCALE_UP)), h = Math.max(1, Math.round(bh * SCALE_UP));
-  const base = document.createElement("canvas");
-  base.width = w; base.height = h;
-  const bctx = base.getContext("2d");
-  bctx.drawImage(video, bx, by, bw, bh, 0, 0, w, h);
-
-  const imgData = bctx.getImageData(0, 0, w, h);
-  const gray = new Uint8ClampedArray(w * h);
-  for (let i = 0, p = 0; i < imgData.data.length; i += 4, p++) {
-    gray[p] = (imgData.data[i] * 0.299 + imgData.data[i + 1] * 0.587 + imgData.data[i + 2] * 0.114) | 0;
+/* Varianti provate a rotazione sui fotogrammi successivi (il voto combina i risultati):
+   - boxPx = altezza in pixel a cui viene portato il riquadro guida. Tesseract LSTM rende al
+     meglio con lettere alte ~20-30px (sopra ~30-40 peggiora): prima si ingrandiva 4x e le
+     lettere uscivano enormi. Scale diverse coprono etichetta vicina/lontana.
+   - gray = scala di grigi con contrasto stirato: il modello LSTM legge meglio i grigi che il
+     bianco/nero; otsu = binarizzato, seconda opinione utile con riflessi/carta lucida.
+     (Una variante in negativo non leggeva mai nulla su etichette scure-su-chiaro: tolta.) */
+const OCR_VARIANTS = [
+  { boxPx: 56, mode: "gray" },
+  { boxPx: 56, mode: "otsu" },
+  { boxPx: 80, mode: "gray" },
+  { boxPx: 40, mode: "gray" },
+];
+function captureBand(band, variant) {
+  const s = Math.min(4, variant.boxPx / band.boxH);
+  const w = Math.max(1, Math.round(band.w * s)), h = Math.max(1, Math.round(band.h * s));
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(video, band.x, band.y, band.w, band.h, 0, 0, w, h);
+  const img = ctx.getImageData(0, 0, w, h), d = img.data;
+  const n = w * h, gray = new Uint8ClampedArray(n), hist = new Uint32Array(256);
+  for (let i = 0, p = 0; p < n; i += 4, p++) {
+    gray[p] = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
+    hist[gray[p]]++;
   }
-  const th = otsuThreshold(gray);
-
-  function makeVariant(inverted) {
-    const c = document.createElement("canvas");
-    c.width = w; c.height = h;
-    const ctx = c.getContext("2d");
-    const out = ctx.createImageData(w, h);
-    for (let p = 0; p < gray.length; p++) {
-      let v = gray[p] > th ? 255 : 0;
-      if (inverted) v = 255 - v;
-      const i = p * 4;
-      out.data[i] = out.data[i + 1] = out.data[i + 2] = v;
-      out.data[i + 3] = 255;
-    }
-    ctx.putImageData(out, 0, 0);
-    return c;
+  // contrasto: 1°-99° percentile -> 0-255 (etichette sbiadite, luce scarsa del padiglione)
+  let lo = 0, hi = 255, acc = 0;
+  while (lo < 254 && (acc += hist[lo]) < n * 0.01) lo++;
+  acc = 0;
+  while (hi > lo + 1 && (acc += hist[hi]) < n * 0.01) hi--;
+  const k = 255 / (hi - lo);
+  for (let p = 0; p < n; p++) gray[p] = (gray[p] - lo) * k;
+  const th = variant.mode === "otsu" ? otsuThreshold(gray) : -1;
+  for (let i = 0, p = 0; p < n; i += 4, p++) {
+    let v = th >= 0 ? (gray[p] > th ? 255 : 0) : gray[p];
+    d[i] = d[i + 1] = d[i + 2] = v;
   }
-  return { normal: makeVariant(false), inverted: makeVariant(true) };
+  ctx.putImageData(img, 0, 0);
+  return c;
 }
 
 function cleanCode(raw) { return raw.replace(/\s+/g, "").toUpperCase(); }
@@ -1032,8 +1062,216 @@ function enforceCodeFormat(code) {
   return m ? m[1] : code;
 }
 
+/* Estrae il codice da QUALUNQUE punto del testo letto (con PSM 11 arrivano anche pezzi di
+   altre scritte inquadrate). Prima cerca il formato esatto; poi una versione tollerante che
+   corregge le confusioni tipiche dell'OCR in base alla posizione: dove il formato vuole una
+   cifra O->0, I->1, S->5, B->8...; nel prefisso il contrario (0->O, 6->G...) + prefisso
+   piu' vicino con 1 carattere di differenza. Ritorna { code, fixes } o null; fixes = quanti
+   caratteri sono stati corretti (0 = lettura esatta). */
+const DIGIT_FIX = { O: "0", Q: "0", D: "0", U: "0", I: "1", L: "1", J: "1", T: "7", Z: "2", S: "5", B: "8", G: "6", A: "4" };
+const PREFIX_FIX = { "0": "O", "6": "G", "5": "S", "8": "B", "7": "T", "1": "I", "2": "Z", "4": "A" };
+const STRICT_CODE_RE = new RegExp("(" + KNOWN_PREFIXES.join("|") + ")[-._]?(\\d{3})[.,]?(\\d{3})");
+const LOOSE_CODE_RE = /([A-Z0-9]{2,3})([-._]?)([A-Z0-9]{3})([.,]?)([A-Z0-9]{3})/y;
+function fixPrefix(p) {
+  if (KNOWN_PREFIXES.includes(p)) return { prefix: p, fixes: 0 };
+  const lettered = p.replace(/[0-9]/g, (ch) => PREFIX_FIX[ch] || ch);
+  const fixes = [...p].filter((ch, i) => ch !== lettered[i]).length;
+  if (KNOWN_PREFIXES.includes(lettered)) return { prefix: lettered, fixes };
+  const near = correctPrefix(lettered + "-");
+  return near !== lettered + "-" ? { prefix: near.slice(0, -1), fixes: fixes + 1 } : null;
+}
+function extractCode(text) {
+  const lines = String(text || "").toUpperCase().split(/\n/).map((l) => l.replace(/\s+/g, ""));
+  // PSM 11 a volte spezza il codice su due "righe" (es. "MTG-261" e ".417"): si prova anche unito
+  if (lines.length > 1) lines.push(lines.join(""));
+  for (const line of lines) {
+    const m = line.match(STRICT_CODE_RE);
+    if (m) return { code: `${m[1]}-${m[2]}.${m[3]}`, fixes: 0 };
+  }
+  let best = null;
+  for (const line of lines) {
+    for (let i = 0; i < line.length; i++) {
+      LOOSE_CODE_RE.lastIndex = i;
+      const m = LOOSE_CODE_RE.exec(line);
+      if (!m) continue;
+      const pre = fixPrefix(m[1]);
+      if (!pre) continue;
+      const raw = m[3] + m[5], digits = raw.replace(/[A-Z]/g, (ch) => DIGIT_FIX[ch] || ch);
+      if (!/^\d{6}$/.test(digits)) continue;
+      const fixes = pre.fixes + [...raw].filter((ch, j) => ch !== digits[j]).length
+        + (m[2] ? 0 : 1) + (m[4] ? 0 : 1); // separatori mancanti = lettura meno affidabile
+      if (fixes > 3) continue;
+      if (!best || fixes < best.fixes) best = { code: `${pre.prefix}-${digits.slice(0, 3)}.${digits.slice(3)}`, fixes };
+    }
+  }
+  return best;
+}
+
+/* Barcode di RISERVA (zxing-wasm, offline): usato solo quando l'OCR non trova un codice
+   valido. Il contenuto del barcode viene accettato solo se e' (o contiene) un codice nel
+   formato PREFISSO-NNN.NNN; altrimenti viene solo segnalato una volta, per capire cosa c'e'
+   dentro. Il lettore wasm (~1MB) viene caricato solo al primo uso. */
+let zxingPrepared = null, unknownBarcodeShown = false;
+/* Le etichette hanno un Code128 con le sole CIFRE del codice, a 10 cifre con zeri davanti
+   (verificato su etichetta reale 2026-10-26: MTG-270.279 -> "0000270279"): il prefisso del
+   gioco NON c'e' e il numero NON e' unico fra i giochi (confermato dall'utente) -> il
+   prefisso si prende SEMPRE dalla scritta letta dall'OCR, mai indovinato.
+   Ritorna { code?, digits } o null. */
+const formatCode = (prefix, digits) => `${prefix}-${digits.slice(0, 3)}.${digits.slice(3)}`;
+function parseBarcode(text) {
+  const found = extractCode(text);
+  if (found && found.fixes === 0) return { code: found.code, digits: found.code.replace(/\D/g, "") };
+  const t = String(text || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  let m = t.match(new RegExp("^(" + KNOWN_PREFIXES.join("|") + ")(\\d{6})$"));
+  if (m) return { code: formatCode(m[1], m[2]), digits: m[2] };
+  m = t.match(/^0*(\d{6})$/);
+  return m ? { digits: m[1] } : null;
+}
+/* Completa le cifre del barcode con il prefisso: exact = un codice letto dall'OCR negli
+   ultimi istanti ha proprio queste cifre (OCR e barcode concordano = lettura sicura);
+   altrimenti prefisso dall'ultimo codice OCR o da un prefisso visto nel testo grezzo. */
+function codeForDigits(digits, raws) {
+  const now = Date.now();
+  const codes = recentReads.filter((r) => r.code && now - r.at < VOTE_MAX_AGE_MS).map((r) => r.code).reverse();
+  const same = codes.find((c) => c.replace(/\D/g, "") === digits);
+  if (same) return { code: same, exact: true };
+  if (codes.length) return { code: formatCode(codes[0].split("-")[0], digits), exact: false };
+  for (const raw of raws || []) {
+    // solo un prefisso seguito da cifre (es. "MTG-27..."), non "OP" dentro una parola qualunque
+    const m = String(raw).toUpperCase().replace(/\s+/g, "").match(new RegExp("(" + KNOWN_PREFIXES.join("|") + ")(?=[-._]?\\d)"));
+    if (m) return { code: formatCode(m[1], digits), exact: false };
+  }
+  return null;
+}
+async function readBarcodeCode() {
+  if (!window.ZXingWASM || !video.videoWidth) return null;
+  if (!zxingPrepared) {
+    zxingPrepared = ZXingWASM.prepareZXingModule({
+      overrides: { locateFile: (path, prefix) => path.endsWith(".wasm") ? new URL("vendor/zxing/" + path, location.href).href : prefix + path },
+      fireImmediately: true,
+    });
+  }
+  await zxingPrepared;
+  // tutta la parte di video visibile sullo schermo, ridotta a max 1280px di lato lungo
+  const vis = visibleVideoRect();
+  const s = Math.min(1, 1280 / Math.max(vis.w, vis.h));
+  const w = Math.round(vis.w * s), h = Math.round(vis.h * s);
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(video, vis.x, vis.y, vis.w, vis.h, 0, 0, w, h);
+  const results = await ZXingWASM.readBarcodes(ctx.getImageData(0, 0, w, h), { tryHarder: true, maxNumberOfSymbols: 4 });
+  for (const r of results) {
+    if (!r.isValid) continue;
+    const parsed = parseBarcode(r.text);
+    sendDebug({ type: "barcode", text: r.text, format: r.format, parsed });
+    if (parsed) return { ...parsed, raw: r.text, format: r.format };
+    if (!unknownBarcodeShown) {
+      unknownBarcodeShown = true;
+      toast(`Barcode letto ma non è un codice etichetta: ${r.text} (${r.format})`, 4000);
+    }
+  }
+  return null;
+}
+
+/* Voto su piu' fotogrammi: una lettura singola puo' sbagliare (riflesso, mano che trema,
+   carattere confuso); lo stesso codice letto in VOTES_NEEDED fotogrammi recenti e' affidabile.
+   Contano solo le letture degli ultimi VOTE_MAX_AGE_MS (spostando l'etichetta le vecchie
+   letture non trascinano il risultato). Un barcode valido vale da solo VOTES_NEEDED voti. */
+const VOTES_NEEDED = 2, VOTE_MAX_AGE_MS = 2500;
+let recentReads = [];
+function pushRead(code, weight) {
+  const now = Date.now();
+  recentReads = recentReads.filter((r) => now - r.at < VOTE_MAX_AGE_MS);
+  recentReads.push({ code, weight, at: now });
+}
+function voteWinner() {
+  const now = Date.now(), tally = new Map();
+  for (const r of recentReads) if (r.code && now - r.at < VOTE_MAX_AGE_MS) tally.set(r.code, (tally.get(r.code) || 0) + r.weight);
+  let best = null, bestN = 0, second = 0;
+  for (const [code, n] of tally) {
+    if (n > bestN) { second = bestN; best = code; bestN = n; } else if (n > second) second = n;
+  }
+  return best && bestN >= VOTES_NEEDED && bestN > second ? { code: best, votes: bestN } : null;
+}
+
+// Un fotogramma alla volta (il worker Tesseract e' uno solo): lettura automatica e bottone 📷
+// si mettono in coda invece di sovrapporsi. Ogni lettura usa la variante successiva.
+let ocrQueue = Promise.resolve(), variantIdx = 0;
+function readFrame() {
+  const run = ocrQueue.then(async () => {
+    if (!video.videoWidth) return null;
+    const variant = OCR_VARIANTS[variantIdx++ % OCR_VARIANTS.length];
+    const { data } = await ocrWorker.recognize(captureBand(guideBandRect(), variant));
+    const raw = (data.text || "").trim();
+    const found = extractCode(raw);
+    sendDebug({ type: "ocrFrame", raw, found, variant });
+    return { raw, found };
+  });
+  ocrQueue = run.catch(() => {});
+  return run;
+}
+
+/* Lettura AUTOMATICA: con la schermata di scansione aperta (modalita' codice, pagamento
+   scelto, niente pannelli aperti) l'OCR gira di continuo; quando il voto conferma un codice
+   si apre la conferma da sola. Il codice appena accettato viene ignorato finche' l'etichetta
+   resta inquadrata (almeno 4s e 3 fotogrammi senza di lui), cosi' la stessa carta non si
+   riapre subito dopo aver chiuso la conferma. Il bottone 📷 invece la rilegge sempre. */
+let autoScan = localStorage.getItem("fs_autoscan") !== "0";
+let manualBusy = false, lastAccepted = null, barcodeTurn = false;
+function canScanNow() {
+  return ocrReady && !scanPaused && !manualBusy && MODE === "code" && !!PAYMENT && !camRestarting
+    && document.visibilityState === "visible" && video.videoWidth > 0
+    && document.getElementById("scanView").classList.contains("active");
+}
+function suppressRepeat(code) {
+  if (!lastAccepted) return code;
+  if (code === lastAccepted.code) { lastAccepted.misses = 0; return null; }
+  if (++lastAccepted.misses >= 3 && Date.now() - lastAccepted.at > 4000) lastAccepted = null;
+  return code;
+}
+function acceptCode(code, info) {
+  scanPaused = true;
+  recentReads = [];
+  lastAccepted = { code, at: Date.now(), misses: 0 };
+  sendDebug({ type: "codeAccepted", code, ...info });
+  if (navigator.vibrate) navigator.vibrate(70);
+  beep();
+  // confidence < 60 = avviso "lettura incerta" nella conferma
+  pending = { code, qty: 1, confidence: info.uncertain ? 30 : 100 };
+  showConfirmSheet();
+}
+async function autoScanLoop() {
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 120));
+    if (!autoScan || !canScanNow()) continue;
+    try {
+      const res = await readFrame();
+      if (!res || !canScanNow()) continue;
+      const code = suppressRepeat(res.found ? res.found.code : null);
+      pushRead(code, 1);
+      // barcode a fotogrammi alterni: ha il checksum, quindi conferma (o completa) l'OCR.
+      // Cifre del barcode = cifre lette dall'OCR -> accettato subito; solo prefisso dall'OCR
+      // -> vale un voto normale (serve un'altra lettura che concordi).
+      if ((barcodeTurn = !barcodeTurn)) {
+        const b = await readBarcodeCode();
+        const full = b && (b.code ? { code: b.code, exact: true } : codeForDigits(b.digits, [res.raw]));
+        if (full && canScanNow() && !(lastAccepted && lastAccepted.code === full.code)) {
+          pushRead(full.code, full.exact ? VOTES_NEEDED : 1);
+        }
+      }
+      const win = voteWinner();
+      if (win && canScanNow()) acceptCode(win.code, { source: "auto", votes: win.votes });
+    } catch (e) {
+      sendDebug({ type: "autoScanError", message: e.message });
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+}
+
+const MANUAL_FRAMES = 4;
 document.getElementById("captureBtn").addEventListener("click", async () => {
-  if (scanPaused) return;
+  if (scanPaused || manualBusy) return;
   if (MODE === "photo") {
     if (!PAYMENT) { openPayMenu(); return; }
     if (!video.videoWidth) { toast("Fotocamera non pronta"); return; }
@@ -1045,28 +1283,52 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
   }
   if (!ocrReady || !ocrWorker) { toast("OCR ancora in caricamento, attendi un attimo…"); return; }
   if (!PAYMENT) { openPayMenu(); return; }
-  scanPaused = true;
+  manualBusy = true;
   const btn = document.getElementById("captureBtn");
   btn.textContent = "⏳";
   try {
-    const { normal, inverted } = captureGuideCrop();
-    const [rNormal, rInverted] = await Promise.all([
-      ocrWorker.recognize(normal),
-      ocrWorker.recognize(inverted),
-    ]);
-    // tiene il risultato con confidenza OCR piu' alta tra le due varianti di contrasto
-    const best = rNormal.data.confidence >= rInverted.data.confidence ? rNormal.data : rInverted.data;
-    const raw = (best.text || "").trim();
-    sendDebug({ type: "ocrResult", raw, confidence: best.confidence });
-    if (navigator.vibrate) navigator.vibrate(70);
-    beep();
-    pending = { code: enforceCodeFormat(correctPrefix(cleanCode(raw))), qty: 1, confidence: best.confidence };
-    showConfirmSheet();
+    // raffica di fotogrammi: ci si ferma appena il voto conferma un codice (le letture
+    // automatiche degli ultimi istanti contano anche loro)
+    const reads = [];
+    let best = null, partialDigits = null;
+    for (let i = 0; i < MANUAL_FRAMES && !best; i++) {
+      const r = await readFrame();
+      if (!r) continue;
+      reads.push(r);
+      pushRead(r.found ? r.found.code : null, 1);
+      const win = voteWinner();
+      if (win) best = { code: win.code, source: "manual", votes: win.votes };
+    }
+    if (!best) {
+      const b = await readBarcodeCode().catch((e) => { sendDebug({ type: "barcodeError", message: e.message }); return null; });
+      if (b) {
+        const full = b.code ? { code: b.code, exact: true } : codeForDigits(b.digits, reads.map((r) => r.raw));
+        if (full) best = { code: full.code, source: "barcode", uncertain: !full.exact };
+        else partialDigits = b.digits; // prefisso mai indovinato: lo scrive l'operatore
+
+      }
+    }
+    if (!best) {
+      // un solo fotogramma ha visto un codice valido: lo si propone, ma come lettura incerta
+      const single = reads.filter((r) => r.found).sort((a, b) => a.found.fixes - b.found.fixes)[0];
+      if (single) best = { code: single.found.code, source: "manual1", uncertain: true };
+    }
+    if (best) acceptCode(best.code, best);
+    else {
+      scanPaused = true;
+      const raw = (reads[0] && reads[0].raw) || "";
+      if (navigator.vibrate) navigator.vibrate(70);
+      pending = partialDigits
+        ? { code: "-" + partialDigits.slice(0, 3) + "." + partialDigits.slice(3), partial: true, qty: 1, confidence: 0 }
+        : { code: enforceCodeFormat(correctPrefix(cleanCode(raw))), qty: 1, confidence: 0 };
+      showConfirmSheet();
+    }
   } catch (e) {
     sendDebug({ type: "ocrError", message: e.message });
     toast("Errore OCR: " + e.message);
     scanPaused = false;
   } finally {
+    manualBusy = false;
     btn.textContent = "📷";
   }
 });
@@ -1106,12 +1368,19 @@ function showConfirmSheet() {
   const label = document.querySelector('label[for="cfCode"]');
   const lowConf = typeof pending.confidence === "number" && pending.confidence < 60;
   const badFormat = !CODE_PATTERN.test(pending.code);
-  if (badFormat) {
+  if (pending.partial) {
+    // cifre certe dal barcode, prefisso non letto: si precompilano le cifre e il cursore va
+    // all'inizio, l'operatore scrive solo il prefisso guardando l'etichetta
+    input.value = pending.code;
+    input.placeholder = "";
+    label.innerHTML = 'Prefisso non letto — scrivilo davanti (MTG, PKM, YGO, RFT, OP) <span style="color:var(--warn)">⚠️</span>';
+  } else if (badFormat) {
     // niente in pre-compilazione: mostrare una lettura palesemente sbagliata invita a
     // confermarla senza guardare. Meglio campo vuoto, costringe a scrivere/controllare.
     input.value = "";
     input.placeholder = "Es. MTG-261.417";
-    label.innerHTML = 'Codice non riconosciuto — scrivilo a mano <span style="color:var(--warn)">⚠️</span>';
+    label.innerHTML = 'Codice non riconosciuto — scrivilo a mano <span style="color:var(--warn)">⚠️</span>'
+      + '<br><span style="font-size:12px;color:var(--dim)">iPhone: tocca il campo → «Scansiona testo» per usare l\'OCR del telefono</span>';
   } else {
     input.value = pending.code;
     input.placeholder = "";
@@ -1120,7 +1389,7 @@ function showConfirmSheet() {
   input.classList.toggle("lowConf", lowConf || badFormat);
   document.getElementById("confirmSheet").classList.add("show");
   input.focus();
-  input.select();
+  if (pending.partial) input.setSelectionRange(0, 0); else input.select();
 }
 function hideConfirmSheet(resume) {
   document.getElementById("confirmSheet").classList.remove("show", "price", "trade", "step1");
@@ -1750,6 +2019,24 @@ function renderEventBox() {
   document.getElementById("eventCurrent").textContent = ev ? ev.name : "Nessun evento (" + SESSION + ")";
 }
 document.getElementById("eventChange").addEventListener("click", () => refreshEvents().then(() => requireEvent(true)));
+// Lettura automatica on/off (Advanced): spenta = si legge solo premendo 📷 (risparmia batteria).
+(function initAutoScanToggle() {
+  const cb = document.getElementById("autoScanToggle");
+  cb.checked = autoScan;
+  cb.addEventListener("change", () => {
+    autoScan = cb.checked;
+    localStorage.setItem("fs_autoscan", autoScan ? "1" : "0");
+    if (MODE === "code") document.getElementById("camHint").textContent = camHintText();
+  });
+})();
+// Testo incollato/dettato nel campo codice (es. «Scansiona testo» di iPhone, che porta con se'
+// anche altre scritte dell'etichetta): se dentro c'e' un codice valido si tiene solo quello.
+document.getElementById("cfCode").addEventListener("input", (e) => {
+  const v = e.target.value;
+  if (v.length <= 11 && !/\s/.test(v)) return;
+  const found = extractCode(v);
+  if (found) e.target.value = found.code;
+});
 function renderDiag() {
   renderEventBox();
   const box = document.getElementById("diagBox");
@@ -1910,6 +2197,8 @@ document.getElementById("photoZoom").addEventListener("click", (e) => { e.curren
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
   if (navigator.onLine) retryPendingSends(); // recupera in automatico eventuali code rimaste da prima
   initOcr(); // in parallelo alla fotocamera, cosi' e' pronto entro la prima cattura
+  autoScanLoop();
+  document.getElementById("camHint").textContent = camHintText();
   camEnabled = true;
   await restartCamera("init");
 })();
