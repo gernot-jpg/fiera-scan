@@ -64,6 +64,12 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px}
 .modeArrow{position:absolute;right:0;bottom:calc(var(--tabh) + var(--payh) + 62px);width:36px;height:64px;border:none;
 border-radius:14px 0 0 14px;background:rgba(255,255,255,.18);color:rgba(255,255,255,.85);font-size:34px;line-height:1;
 display:flex;align-items:center;justify-content:center;padding:0}
+/* Standby lettura automatica: bottone per riprenderla, sotto il riquadro guida */
+#autoWake{position:absolute;left:50%;top:50%;transform:translate(-50%,56px);display:flex;align-items:center;gap:8px;
+padding:12px 18px;border:none;border-radius:24px;background:var(--accent2);color:#fff;font-size:16px;font-weight:600;
+box-shadow:0 4px 16px rgba(0,0,0,.4);white-space:nowrap}
+#autoWake[hidden],#scanView.photoMode #autoWake{display:none}
+#scanView.autoIdle .guide .box{border-style:dashed;opacity:.55}
 #scanView.photoMode .modeArrow{right:auto;left:0;border-radius:0 14px 14px 0}
 .modeTitle{display:none;position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;background:rgba(20,26,38,.75);
 color:#fff;font-size:14px;font-weight:700;padding:10px 14px;border-radius:22px}
@@ -205,6 +211,7 @@ border-radius:12px;padding:10px 12px}
       <button class="roundBtn" id="torchBtn" title="Torcia" aria-label="Torcia">🔦</button>
       <button class="roundBtn" id="camRestart" title="Riavvia fotocamera" aria-label="Riavvia fotocamera">🔄</button>
     </div>
+    <button id="autoWake" hidden>▶ Riprendi lettura</button>
     <div class="hint" id="camHint">Allinea il numero sull'etichetta nel riquadro, poi premi 📷</div>
     <button id="captureBtn" class="captureBtn" title="Leggi codice" aria-label="Leggi codice">📷</button>
     <!-- Tipo di pagamento: resta selezionato finche' non lo cambi, vale per ogni carta scansionata dopo. -->
@@ -499,6 +506,7 @@ document.getElementById("gameOpen").addEventListener("click", () => {
 });
 function camHintText() {
   if (MODE === "photo") return "Inquadra la carta nel riquadro, poi premi 📷";
+  if (autoScan && autoIdle) return "Lettura automatica in pausa: tocca ▶ per riprendere (o premi 📷)";
   return autoScan ? "Inquadra il numero dell'etichetta vicino al riquadro: si legge da solo (o premi 📷)"
     : "Allinea il numero sull'etichetta nel riquadro, poi premi 📷";
 }
@@ -1241,10 +1249,34 @@ function acceptCode(code, info) {
   pending = { code, qty: 1, confidence: info.uncertain ? 30 : 100 };
   showConfirmSheet();
 }
+/* Standby: se la lettura automatica gira AUTO_IDLE_MS senza riconoscere nessun codice si
+   ferma (batteria/calore del telefono). Riparte col bottone "▶ Riprendi lettura", con 📷, o da
+   sola quando si torna a scansionare (chiusa la conferma, rientro nell'app o nella schermata). */
+const AUTO_IDLE_MS = 10000;
+let autoIdle = false, autoActiveSince = 0, wasScanning = false;
+function setAutoIdle(idle) {
+  autoIdle = idle;
+  document.getElementById("autoWake").hidden = !idle;
+  document.getElementById("scanView").classList.toggle("autoIdle", idle);
+  if (MODE === "code") document.getElementById("camHint").textContent = camHintText();
+}
+function wakeAutoScan() {
+  autoActiveSince = Date.now();
+  if (autoIdle) setAutoIdle(false);
+}
+document.getElementById("autoWake").addEventListener("click", wakeAutoScan);
 async function autoScanLoop() {
   for (;;) {
     await new Promise((r) => setTimeout(r, 120));
-    if (!autoScan || !canScanNow()) continue;
+    const active = autoScan && canScanNow();
+    if (active && !wasScanning) wakeAutoScan(); // si torna a poter scansionare: timer da capo
+    wasScanning = active;
+    if (!active || autoIdle) continue;
+    if (Date.now() - autoActiveSince > AUTO_IDLE_MS) {
+      setAutoIdle(true);
+      sendDebug({ type: "autoScanIdle" });
+      continue;
+    }
     try {
       const res = await readFrame();
       if (!res || !canScanNow()) continue;
@@ -1283,6 +1315,7 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
   }
   if (!ocrReady || !ocrWorker) { toast("OCR ancora in caricamento, attendi un attimo…"); return; }
   if (!PAYMENT) { openPayMenu(); return; }
+  wakeAutoScan();
   manualBusy = true;
   const btn = document.getElementById("captureBtn");
   btn.textContent = "⏳";
@@ -2025,6 +2058,7 @@ document.getElementById("eventChange").addEventListener("click", () => refreshEv
   cb.checked = autoScan;
   cb.addEventListener("change", () => {
     autoScan = cb.checked;
+    if (!autoScan) setAutoIdle(false);
     localStorage.setItem("fs_autoscan", autoScan ? "1" : "0");
     if (MODE === "code") document.getElementById("camHint").textContent = camHintText();
   });
