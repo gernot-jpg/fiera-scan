@@ -1449,6 +1449,18 @@ document.getElementById("qtyPlus").addEventListener("click", () => {
   if (pending) { pending.qty++; document.getElementById("qtyVal").textContent = pending.qty; } });
 document.getElementById("cfCancel").addEventListener("click", () => hideConfirmSheet(true));
 document.getElementById("cfX").addEventListener("click", () => hideConfirmSheet(true));
+/* Tocco sulla zona della fotocamera (fuori dal pannello di conferma) = come ✕, torna indietro.
+   I bottoni sopra la fotocamera (torcia, 🔄...) restano bottoni. Con la tastiera aperta il
+   primo tocco la chiude soltanto: chi tocca sopra per abbassarla non perde quello che ha scritto. */
+document.querySelector(".camWrap").addEventListener("click", (e) => {
+  if (!document.getElementById("confirmSheet").classList.contains("show")) return;
+  if (e.target.closest(".sheet, button, input, select, a")) return;
+  if (document.documentElement.classList.contains("kbOpen")) {
+    if (document.activeElement) document.activeElement.blur();
+    return;
+  }
+  hideConfirmSheet(true);
+});
 // Prezzo obbligatorio (anche solo 0), virgola o punto. E' il prezzo del SINGOLO pezzo. Ritorna il numero, oppure null (e avvisa) se manca/non valido.
 function readPriceInput(what) {
   const el = document.getElementById("cfPrice");
