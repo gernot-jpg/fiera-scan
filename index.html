@@ -191,7 +191,80 @@ width:100%;max-width:480px;box-shadow:0 -8px 30px rgba(0,0,0,.5)}
 border-radius:12px;padding:10px 12px}
 .sessItem b{font-size:14px}
 .sessItem .l{font-size:12px;color:var(--dim)}
+
+/* ===== Grafica "Banco" (prova, attivabile in Advanced): chiara e ad alto contrasto per la luce
+   dei padiglioni. Stessa struttura della pagina: cambiano i colori (token) e la disposizione
+   della schermata di scansione — fotocamera in una scheda in alto, pagamenti sempre visibili
+   in griglia, bottone grande "Leggi codice". Solo CSS: nessun peso in piu'. ===== */
+html.ui-banco{--bg:#f3f1ec;--panel:#ffffff;--panel2:#f7f5f0;--line:#d8d4ca;--fg:#16150f;--dim:#6b6860;
+--accent:#c2410c;--accent2:#c2410c;--good:#15803d;--warn:#b45309;--bad:#b91c1c;color-scheme:light;
+--bTop:calc(env(safe-area-inset-top) + 76px);--bCtl:244px;--bVidH:calc(100% - var(--bTop) - var(--tabh) - var(--bCtl))}
+html.ui-banco .camWrap{background:var(--bg)}
+/* il <video> e' un elemento "sostituito": con width:auto non si allarga fra left e right, serve la larghezza esplicita */
+html.ui-banco #video,html.ui-banco .guide{position:absolute;top:var(--bTop);left:12px;width:calc(100% - 24px);height:var(--bVidH);
+border-radius:22px;overflow:hidden}
+html.ui-banco #video{background:#24211d}
+html.ui-banco #scanView.photoMode .guide{padding:14px 0}
+html.ui-banco .guide .box{border-color:#fff;box-shadow:0 0 0 2000px rgba(0,0,0,.28)}
+.bHead{display:none}
+html.ui-banco .bHead{position:absolute;top:0;left:0;right:0;height:var(--bTop);box-sizing:border-box;display:flex;align-items:flex-end;
+justify-content:space-between;gap:12px;padding:0 18px 10px}
+.bHead .k{font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1.3px}
+.bHead .v{font-size:20px;font-weight:800;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bHead > div:first-child{min-width:0;flex:1}
+.bHead > div:last-child{text-align:right;flex:none}
+html.ui-banco .camControls{top:calc(var(--bTop) + 10px);right:22px}
+html.ui-banco .roundBtn{background:rgba(255,255,255,.92);color:var(--fg)}
+html.ui-banco #scanView .camWrap .modeTitle{top:calc(var(--bTop) + 10px);left:22px;background:#fff;color:var(--fg)}
+html.ui-banco #basketBar{top:calc(var(--bTop) + 12px);background:var(--accent);border-color:var(--accent)}
+html.ui-banco #autoWake{top:calc(var(--bTop) + var(--bVidH) / 2);background:var(--accent)}
+html.ui-banco .hint{top:calc(var(--bTop) + var(--bVidH) + 8px);bottom:auto;left:16px;right:16px;color:var(--dim);text-shadow:none;
+font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#payGrid{display:none}
+html.ui-banco #payGrid{position:absolute;left:12px;right:12px;bottom:calc(var(--tabh) + 92px);display:grid;
+grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+html.ui-banco #scanView.photoMode #payGrid{display:none}
+#payGrid button{height:50px;border-radius:14px;border:2px solid var(--line);background:var(--panel);color:var(--fg);font-size:15px;font-weight:600}
+#payGrid button.on{background:var(--fg);border-color:var(--fg);color:#fff;font-weight:800}
+#payGrid.missing button{border-color:var(--warn)}
+html.ui-banco .payBar{display:none}
+html.ui-banco #scanView.photoMode .payBar{display:flex;bottom:calc(var(--tabh) + 92px);height:auto;padding:0 12px}
+html.ui-banco #payOpen,html.ui-banco #gameOpen{background:var(--panel);color:var(--fg);border:2px solid var(--line);min-height:50px;border-radius:14px;
+-webkit-backdrop-filter:none;backdrop-filter:none}
+html.ui-banco #payOpen.missing{border-color:var(--warn);background:#fff7ed}
+html.ui-banco .captureBtn{left:88px;right:12px;bottom:calc(var(--tabh) + 12px);width:auto;height:68px;transform:none;border:none;border-radius:18px;
+background:var(--accent);color:#fff;font-size:0}
+html.ui-banco .captureBtn::before{content:"Leggi codice";font-size:19px;font-weight:800}
+html.ui-banco #scanView.photoMode .captureBtn::before{content:"Scatta foto"}
+html.ui-banco .captureBtn:active{background:#9a3412}
+html.ui-banco .modeArrow,html.ui-banco #scanView.photoMode .modeArrow{left:12px;right:auto;bottom:calc(var(--tabh) + 12px);width:68px;height:68px;
+border-radius:18px;border:2px solid var(--line);background:var(--panel);color:var(--fg);font-size:0}
+html.ui-banco .modeArrow::before{content:"Senza\A codice";white-space:pre;font-size:12px;font-weight:700;line-height:1.25}
+html.ui-banco #scanView.photoMode .modeArrow::before{content:"Con\A codice"}
+html.ui-banco .sheet{border-radius:26px 26px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.18);border-top:none}
+html.ui-banco .codeInput{background:#fff;border:2px solid var(--line);border-radius:16px;font-size:30px;font-weight:900;letter-spacing:-.5px;padding:12px}
+html.ui-banco .codeInput:focus{outline:none;border-color:var(--fg)}
+html.ui-banco .codeInput.lowConf{border-color:var(--warn);box-shadow:none}
+html.ui-banco .ocrLabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px}
+html.ui-banco .qtyBtn{border-radius:14px;width:52px;height:52px;border:2px solid var(--line);background:#fff}
+html.ui-banco .sheetBtns button{min-height:60px;border-radius:16px;font-size:16px;font-weight:700}
+html.ui-banco .btnAdd{background:var(--accent);color:#fff;font-size:19px;font-weight:900;letter-spacing:.4px;flex:1.6}
+html.ui-banco .btnMulti,html.ui-banco .btnCancel{background:#fff;color:var(--fg);border:2px solid var(--line)}
+html.ui-banco .toolbar button.primary{color:#fff}
+html.ui-banco .tabs{background:var(--panel)}
+html.ui-banco .tabs button.active{color:var(--accent);font-weight:700}
+.tabs .icB{display:none}
+html.ui-banco .tabs .ic{display:none}
+html.ui-banco .tabs .icB{display:block}
+html.ui-banco .toast{background:var(--fg)}
+html.ui-banco .payTag{background:#efe9dc;color:var(--fg)}
+html.ui-banco .syncTag.ok{background:#dcfce7}
+html.ui-banco .syncTag.pending{background:#fef3c7}
 </style>
+<script>
+// grafica scelta in Advanced, applicata prima del disegno della pagina (niente lampo di colori)
+try { if (localStorage.getItem("fs_ui") === "banco") document.documentElement.classList.add("ui-banco"); } catch (e) {}
+</script>
 
 <div class="topbar" style="display:none">
   <h1 id="topTitle">Scansiona</h1>
@@ -204,6 +277,8 @@ border-radius:12px;padding:10px 12px}
     Vai su <b>Advanced</b> per inserire il codice di collegamento.
   </div>
   <div class="camWrap">
+    <div class="bHead"><div><div class="k">Evento</div><div class="v" id="bEvent"></div></div>
+      <div><div class="k">Vendite</div><div class="v" id="bCount">0</div></div></div>
     <video id="video" playsinline muted></video>
     <div class="guide"><div class="box"></div><div class="cardBox"></div></div>
     <div class="modeTitle">📸 Vendita senza codice</div>
@@ -216,6 +291,7 @@ border-radius:12px;padding:10px 12px}
     <button id="captureBtn" class="captureBtn" title="Leggi codice" aria-label="Leggi codice">📷</button>
     <!-- Tipo di pagamento: resta selezionato finche' non lo cambi, vale per ogni carta scansionata dopo. -->
     <button class="modeArrow" id="modeArrow" aria-label="Vendita senza codice">‹</button>
+    <div id="payGrid" role="radiogroup" aria-label="Tipo di pagamento"></div>
     <div class="payBar"><button id="payOpen" aria-haspopup="dialog"></button><button id="gameOpen" aria-haspopup="dialog"></button></div>
     <button id="basketBar" hidden></button>
     <div class="sheet" id="confirmSheet">
@@ -281,6 +357,11 @@ border-radius:12px;padding:10px 12px}
     </div>
     <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
       border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
+      <input type="checkbox" id="uiBancoToggle" style="width:22px;height:22px">
+      <span>Grafica nuova «Banco» (prova)<br><span style="font-size:12px;color:var(--dim)">chiara, pagamenti sempre visibili, bottoni grandi</span></span>
+    </label>
+    <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
+      border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
       <input type="checkbox" id="autoScanToggle" style="width:22px;height:22px">
       <span>Lettura automatica del codice<br><span style="font-size:12px;color:var(--dim)">spenta = si legge solo premendo 📷</span></span>
     </label>
@@ -324,9 +405,9 @@ border-radius:12px;padding:10px 12px}
 </div>
 
 <div class="tabs">
-  <button class="tab active" data-view="scanView"><span class="ic">📷</span>Scansiona</button>
-  <button class="tab" data-view="listView"><span class="ic">🗂️</span>Sessione</button>
-  <button class="tab" data-view="sessionsView"><span class="ic">📋</span>Advanced</button>
+  <button class="tab active" data-view="scanView"><span class="ic">📷</span><svg class="icB" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/></svg>Scansiona</button>
+  <button class="tab" data-view="listView"><span class="ic">🗂️</span><svg class="icB" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Sessione</button>
+  <button class="tab" data-view="sessionsView"><span class="ic">📋</span><svg class="icB" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Advanced</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -466,7 +547,18 @@ function renderPayBar() {
   const half = typeof MODE !== "undefined" && MODE === "photo"; // bottone a meta' larghezza: testo corto
   btn.textContent = PAYMENT ? (half ? "💳 " : "💳 Pagamento: ") + PAYMENT : (half ? "💳 Pagamento" : "💳 Scegli tipo di pagamento");
   btn.classList.toggle("missing", !PAYMENT);
+  const grid = document.getElementById("payGrid");
+  grid.classList.toggle("missing", !PAYMENT);
+  grid.innerHTML = PAYMENTS.map((p, i) =>
+    `<button type="button" role="radio" aria-checked="${p === PAYMENT}" class="${p === PAYMENT ? "on" : ""}" data-i="${i}">${escapeHtml(p)}</button>`).join("");
 }
+document.getElementById("payGrid").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  PAYMENT = PAYMENTS[Number(b.dataset.i)];
+  localStorage.setItem("fs_payment", PAYMENT);
+  renderPayBar();
+});
 // Menu a scelta singola, usato sia per il pagamento sia per il gioco.
 function openChoiceMenu(title, options, current, onPick) {
   const overlay = document.getElementById("payModal");
@@ -505,6 +597,11 @@ document.getElementById("gameOpen").addEventListener("click", () => {
   openChoiceMenu("Gioco", GAMES, GAME, (g) => { GAME = g; localStorage.setItem("fs_game", GAME); renderGameBtn(); });
 });
 function camHintText() {
+  if (document.documentElement.classList.contains("ui-banco")) {
+    if (MODE === "photo") return "Inquadra la carta e premi Scatta foto";
+    if (autoScan && autoIdle) return "In pausa: tocca Riprendi o Leggi codice";
+    return autoScan ? "Inquadra l'etichetta: si legge da sola" : "Inquadra l'etichetta e premi Leggi codice";
+  }
   if (MODE === "photo") return "Inquadra la carta nel riquadro, poi premi 📷";
   if (autoScan && autoIdle) return "Lettura automatica in pausa: tocca ▶ per riprendere (o premi 📷)";
   return autoScan ? "Inquadra il numero dell'etichetta vicino al riquadro: si legge da solo (o premi 📷)"
@@ -954,7 +1051,8 @@ function otsuThreshold(gray) {
    che il browser applica per riempire lo schermo con l'immagine nativa della fotocamera. */
 const BAND_HEIGHT = 4;
 function visibleVideoRect() {
-  const wrapRect = document.querySelector(".camWrap").getBoundingClientRect();
+  // rettangolo del <video> sullo schermo (nella grafica Banco e' una scheda, non tutto lo schermo)
+  const wrapRect = video.getBoundingClientRect();
   const vw = video.videoWidth, vh = video.videoHeight;
   const scale = Math.max(wrapRect.width / vw, wrapRect.height / vh);
   const offX = (wrapRect.width - vw * scale) / 2, offY = (wrapRect.height - vh * scale) / 2;
@@ -1960,6 +2058,8 @@ async function renderRows() {
   const rows = all.filter((r) => r.session === SESSION).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const list = document.getElementById("rowsList");
   document.getElementById("sumRows").textContent = rows.length;
+  document.getElementById("bEvent").textContent = SESSION;
+  document.getElementById("bCount").textContent = rows.length;
   document.getElementById("sumQty").textContent = rows.reduce((s, r) => s + r.qty, 0);
   if (!rows.length) { list.innerHTML = '<div class="empty">Nessuna carta scansionata in questa sessione.</div>'; return; }
   list.innerHTML = rows.map((r) => {
@@ -2078,6 +2178,21 @@ function renderEventBox() {
   document.getElementById("eventCurrent").textContent = ev ? ev.name : "Nessun evento (" + SESSION + ")";
 }
 document.getElementById("eventChange").addEventListener("click", () => refreshEvents().then(() => requireEvent(true)));
+// Grafica "Banco" on/off (Advanced): solo su questo telefono.
+(function initUiToggle() {
+  const cb = document.getElementById("uiBancoToggle");
+  const apply = (on) => {
+    document.documentElement.classList.toggle("ui-banco", on);
+    document.querySelector('meta[name="theme-color"]').setAttribute("content", on ? "#f3f1ec" : "#184f95");
+    document.getElementById("camHint").textContent = camHintText();
+  };
+  cb.checked = document.documentElement.classList.contains("ui-banco");
+  if (cb.checked) document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f3f1ec");
+  cb.addEventListener("change", () => {
+    try { localStorage.setItem("fs_ui", cb.checked ? "banco" : ""); } catch (e) {}
+    apply(cb.checked);
+  });
+})();
 // Lettura automatica on/off (Advanced): spenta = si legge solo premendo 📷 (risparmia batteria).
 (function initAutoScanToggle() {
   const cb = document.getElementById("autoScanToggle");
