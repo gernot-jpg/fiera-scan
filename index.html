@@ -1497,6 +1497,12 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
   if (!ocrReady || !ocrWorker) { toast("OCR ancora in caricamento, attendi un attimo…"); return; }
   if (!PAYMENT) { openPayMenu(); return; }
   manualBusy = true;
+  // iPhone apre la tastiera solo se il focus arriva DENTRO il tocco, non dopo l'attesa della
+  // lettura: si mette subito il cursore nel campo codice (pannello ancora nascosto), cosi' se
+  // il codice non viene letto si scrive direttamente; se viene letto lo si trova gia' selezionato.
+  const codeInput = document.getElementById("cfCode");
+  codeInput.value = "";
+  codeInput.focus({ preventScroll: true });
   const btn = document.getElementById("captureBtn");
   btn.textContent = "⏳";
   try {
@@ -1527,8 +1533,10 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
       const single = reads.filter((r) => r.found).sort((a, b) => a.found.fixes - b.found.fixes)[0];
       if (single) best = { code: single.found.code, source: "manual1", uncertain: true };
     }
-    if (best) acceptCode(best.code, best);
-    else {
+    if (best) {
+      acceptCode(best.code, best);
+      if (!document.getElementById("confirmSheet").classList.contains("show")) codeInput.blur(); // codice appena scaricato: niente pannello
+    } else {
       scanPaused = true;
       const raw = (reads[0] && reads[0].raw) || "";
       if (navigator.vibrate) navigator.vibrate(70);
@@ -1540,6 +1548,7 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
   } catch (e) {
     sendDebug({ type: "ocrError", message: e.message });
     toast("Errore OCR: " + e.message);
+    codeInput.blur();
     scanPaused = false;
   } finally {
     manualBusy = false;
@@ -1609,8 +1618,7 @@ function showConfirmSheet() {
     // confermarla senza guardare. Meglio campo vuoto, costringe a scrivere/controllare.
     input.value = "";
     input.placeholder = "Es. MTG-261.417";
-    label.innerHTML = 'Codice non riconosciuto — scrivilo a mano <span style="color:var(--warn)">⚠️</span>'
-      + '<br><span style="font-size:12px;color:var(--dim)">iPhone: tocca il campo → «Scansiona testo» per usare l\'OCR del telefono</span>';
+    label.innerHTML = 'Codice non riconosciuto — scrivilo a mano <span style="color:var(--warn)">⚠️</span>';
   } else {
     input.value = pending.code;
     input.placeholder = "";
@@ -1618,7 +1626,7 @@ function showConfirmSheet() {
   }
   input.classList.toggle("lowConf", lowConf || badFormat);
   document.getElementById("confirmSheet").classList.add("show");
-  input.focus();
+  input.focus({ preventScroll: true }); // senza preventScroll iPhone fa saltare in su tutta la pagina
   if (pending.partial) input.setSelectionRange(0, 0); else input.select();
 }
 /* "Scorri per scaricare" (grafica Mix, ultimo passo): il pomello va trascinato fino in fondo,
