@@ -260,10 +260,36 @@ html.ui-banco .toast{background:var(--fg)}
 html.ui-banco .payTag{background:#efe9dc;color:var(--fg)}
 html.ui-banco .syncTag.ok{background:#dcfce7}
 html.ui-banco .syncTag.pending{background:#fef3c7}
+/* ===== Grafica "Mix" = Banco + due pezzi di "Ticket": colore per gioco (dal prefisso del codice)
+   e "scorri per scaricare" sull'ultimo passo, che scarica stock vero: niente scarichi per un tocco sbagliato. ===== */
+.gChip,#cfSlide{display:none}
+html.ui-mix .gChip{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:900;
+letter-spacing:1px;background:var(--gc,#16150f);color:var(--gt,#fff)}
+html.ui-mix .gChip:empty{display:none}
+html.ui-mix #cfCodeShow .gChip{margin-right:8px;vertical-align:middle}
+html.ui-mix .sheet{border-top:6px solid var(--gc,transparent)}
+html.ui-mix .sheet .codeInput{border-left:8px solid var(--gc,var(--line))}
+html.ui-mix .sheet .codeInput:focus,html.ui-mix .sheet .codeInput.lowConf{border-left-color:var(--gc,var(--fg))}
+html.ui-mix .row{border-left:6px solid var(--gc,var(--line))}
+[data-g="MTG"]{--gc:#9a3412;--gt:#fff}
+[data-g="PKM"]{--gc:#facc15;--gt:#16150f}
+[data-g="YGO"]{--gc:#6d28d9;--gt:#fff}
+[data-g="OP"]{--gc:#dc2626;--gt:#fff}
+[data-g="RFT"]{--gc:#0e7490;--gt:#fff}
+html.ui-mix .sheet.price:not(.photo) #cfAdd{display:none}
+html.ui-mix .sheet.price:not(.photo) .sheetBtns{flex-wrap:wrap}
+html.ui-mix .sheet.price:not(.photo) #cfSlide{display:flex}
+#cfSlide{position:relative;flex:1 1 100%;order:3;height:68px;border-radius:34px;background:#16150f;color:#f3f1ec;align-items:center;
+justify-content:center;font-size:17px;font-weight:800;letter-spacing:.3px;user-select:none;-webkit-user-select:none;touch-action:none;overflow:hidden}
+#cfSlide .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);border-radius:34px}
+#cfSlide .txt{position:relative;padding-left:56px;pointer-events:none}
+#cfSlide #cfSlideKnob{position:absolute;left:6px;top:6px;width:56px;height:56px;min-height:0;padding:0;flex:none;border-radius:28px;
+border:none;background:#fff;color:var(--accent);display:flex;align-items:center;justify-content:center;touch-action:none;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+#cfSlide.back #cfSlideKnob,#cfSlide.back .fill{transition:transform .2s ease-out,width .2s ease-out}
 </style>
 <script>
 // grafica scelta in Advanced, applicata prima del disegno della pagina (niente lampo di colori)
-try { if (localStorage.getItem("fs_ui") === "banco") document.documentElement.classList.add("ui-banco"); } catch (e) {}
+try { if (["banco", "mix"].includes(localStorage.getItem("fs_ui"))) document.documentElement.classList.add("ui-banco", "ui-mix"); } catch (e) {}
 </script>
 
 <div class="topbar" style="display:none">
@@ -297,6 +323,7 @@ try { if (localStorage.getItem("fs_ui") === "banco") document.documentElement.cl
     <div class="sheet" id="confirmSheet">
       <button id="cfX" type="button" aria-label="Annulla scansione">✕</button>
       <div id="cfCodeBlock">
+        <span class="gChip" id="cfGameChip"></span>
         <label class="ocrLabel" for="cfCode">Codice letto (correggi se serve)</label>
         <input id="cfCode" class="codeInput" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
       </div>
@@ -323,6 +350,8 @@ try { if (localStorage.getItem("fs_ui") === "banco") document.documentElement.cl
         <button class="btnMulti" id="cfMulti">Scansione multipla</button>
         <button class="btnMulti" id="cfPayBtn" aria-label="Cambia tipo di pagamento"></button>
         <button class="btnAdd" id="cfAdd">SCARICA</button>
+        <div id="cfSlide"><div class="fill"></div><span class="txt">Scorri per scaricare</span>
+          <button id="cfSlideKnob" type="button" aria-label="Scarica (scorri a destra)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
       </div>
     </div>
   </div>
@@ -358,7 +387,7 @@ try { if (localStorage.getItem("fs_ui") === "banco") document.documentElement.cl
     <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
       border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
       <input type="checkbox" id="uiBancoToggle" style="width:22px;height:22px">
-      <span>Grafica nuova «Banco» (prova)<br><span style="font-size:12px;color:var(--dim)">chiara, pagamenti sempre visibili, bottoni grandi</span></span>
+      <span>Grafica nuova «Mix» (prova)<br><span style="font-size:12px;color:var(--dim)">chiara, pagamenti sempre visibili, colore per gioco, scorri per scaricare</span></span>
     </label>
     <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
       border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
@@ -1478,6 +1507,18 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
   }
 });
 
+/* Colore per gioco (grafica Mix): dal prefisso del codice, o dal gioco per le vendite senza codice. */
+const GAME_LABEL = { MTG: "MAGIC", PKM: "POKÉMON", YGO: "YU-GI-OH!", OP: "ONE PIECE", RFT: "RIFTBOUND" };
+function gameKey(code, game) {
+  const m = String(code || "").toUpperCase().match(new RegExp("^(" + KNOWN_PREFIXES.join("|") + ")(?=-|$)"));
+  return m ? m[1] : GAME_CODE_PREFIX[game] || "";
+}
+function paintSheetGame(key) {
+  const sheet = document.getElementById("confirmSheet");
+  if (key) sheet.dataset.g = key; else delete sheet.dataset.g;
+  document.getElementById("cfGameChip").textContent = GAME_LABEL[key] || "";
+}
+
 /* ---------- flusso: cattura -> codice modificabile + qty -> aggiungi ---------- */
 let pending = null; // { code, qty }
 function showConfirmSheet() {
@@ -1495,6 +1536,7 @@ function showConfirmSheet() {
     document.getElementById("cfPriceLabel").textContent = "Valore d'acquisto (€ al pezzo)";
     document.getElementById("cfGameWrap").style.display = "";
     document.getElementById("cfAdd").textContent = "REGISTRA";
+    paintSheetGame(gameKey("", pending.game));
     sheet.classList.remove("price");
     resetExtraPays();
     sheet.classList.add("photo", "show");
@@ -1505,7 +1547,10 @@ function showConfirmSheet() {
   resetExtraPays();
   pending.step = 1;
   sheet.classList.add("step1");
-  document.getElementById("cfAdd").textContent = BASKET.length ? "💳 PAGAMENTO" : "SCARICA";
+  // in Mix il primo tasto porta solo al prezzo: lo scarico vero e' lo "scorri per scaricare"
+  document.getElementById("cfAdd").textContent = BASKET.length ? "💳 PAGAMENTO"
+    : document.documentElement.classList.contains("ui-mix") ? "AVANTI →" : "SCARICA";
+  paintSheetGame(gameKey(pending.code));
   document.getElementById("cfGameWrap").style.display = "none";
   // Due controlli indipendenti: la confidenza dichiarata da Tesseract (0-100, puo' essere
   // ingannevole: a volte e' "sicuro" anche leggendo male) E la struttura attesa del codice
@@ -1536,6 +1581,43 @@ function showConfirmSheet() {
   input.focus();
   if (pending.partial) input.setSelectionRange(0, 0); else input.select();
 }
+/* "Scorri per scaricare" (grafica Mix, ultimo passo): il pomello va trascinato fino in fondo,
+   poi scatta lo stesso SCARICA di sempre. Un tocco da solo non scarica. */
+(function initSlide() {
+  const track = document.getElementById("cfSlide");
+  const knob = document.getElementById("cfSlideKnob");
+  const fill = track.querySelector(".fill");
+  let startX = null, dx = 0;
+  const maxX = () => track.clientWidth - knob.offsetWidth - 12;
+  const paint = (x) => { knob.style.transform = `translateX(${x}px)`; fill.style.width = (x + 62) + "px"; };
+  const reset = () => { track.classList.add("back"); dx = 0; paint(0); fill.style.width = "0"; setTimeout(() => track.classList.remove("back"), 220); };
+  knob.addEventListener("pointerdown", (e) => {
+    if (!pending) return;
+    startX = e.clientX; dx = 0; track.classList.remove("back");
+    knob.setPointerCapture(e.pointerId);
+  });
+  knob.addEventListener("pointermove", (e) => {
+    if (startX === null) return;
+    dx = Math.max(0, Math.min(maxX(), e.clientX - startX));
+    paint(dx);
+  });
+  const end = () => {
+    if (startX === null) return;
+    startX = null;
+    if (dx >= maxX() * 0.9) {
+      paint(maxX());
+      document.getElementById("cfAdd").click();
+      setTimeout(reset, 400);
+    } else {
+      if (dx < 8) toast("Trascina la freccia fino in fondo per scaricare");
+      reset();
+    }
+  };
+  knob.addEventListener("pointerup", end);
+  knob.addEventListener("pointercancel", () => { startX = null; reset(); });
+  // da tastiera (Invio/Spazio sul pomello) conta come gesto voluto
+  knob.addEventListener("click", (e) => { if (e.detail === 0) document.getElementById("cfAdd").click(); });
+})();
 function hideConfirmSheet(resume) {
   document.getElementById("confirmSheet").classList.remove("show", "price", "trade", "step1");
   pending = null;
@@ -1704,7 +1786,8 @@ async function confirmAdd() {
     document.getElementById("confirmSheet").classList.remove("step1");
     pending.code = code;
     pending.step = 2;
-    document.getElementById("cfCodeShow").textContent = code;
+    document.getElementById("cfCodeShow").innerHTML = `<span class="gChip">${GAME_LABEL[gameKey(code)] || ""}</span>` + escapeHtml(code);
+    paintSheetGame(gameKey(code));
     document.getElementById("cfPriceLabel").textContent = "Prezzo di vendita (€ al pezzo)";
     const priceEl = document.getElementById("cfPrice");
     priceEl.value = "";
@@ -2063,7 +2146,7 @@ async function renderRows() {
   document.getElementById("sumQty").textContent = rows.reduce((s, r) => s + r.qty, 0);
   if (!rows.length) { list.innerHTML = '<div class="empty">Nessuna carta scansionata in questa sessione.</div>'; return; }
   list.innerHTML = rows.map((r) => {
-    if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}">
+    if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}" data-g="${gameKey("", r.game)}">
       <div class="rTop" style="gap:10px">
         ${r.photo ? `<img class="rThumb zoomable" src="${escapeHtml(r.photo)}" alt="Foto della carta">` : ""}
         <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · <button class="rGame" aria-label="Cambia gioco">${escapeHtml(r.game)} ✎</button>${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(paymentsText(r))}</span>` : ""}${testTag(r)}</div>
@@ -2082,7 +2165,7 @@ async function renderRows() {
     const errTitle = r.lastError ? ` title="${escapeHtml(r.lastError)}"` : "";
     const siteTag = pending === 0 && (r.sentQty || 0) > 0 ? '<span class="syncTag ok">✔ inviato</span>'
       : pending > 0 ? `<span class="syncTag pending"${errTitle}>${pending} ${isRejected(r) ? "rifiutata dal sito" : "da inviare"}${r.lastError ? " ⚠️" : ""}</span>` : "";
-    return `<div class="row" data-id="${r.clientId}">
+    return `<div class="row" data-id="${r.clientId}" data-g="${gameKey(r.code)}">
       <div class="rTop">
         <div class="rName">${escapeHtml(r.code)}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(paymentsText(r))}</span>` : ""}${testTag(r)}</div>
         <button class="rDel" aria-label="Elimina ${escapeHtml(r.code)}">✕</button>
@@ -2183,13 +2266,15 @@ document.getElementById("eventChange").addEventListener("click", () => refreshEv
   const cb = document.getElementById("uiBancoToggle");
   const apply = (on) => {
     document.documentElement.classList.toggle("ui-banco", on);
+    document.documentElement.classList.toggle("ui-mix", on);
+    renderRows();
     document.querySelector('meta[name="theme-color"]').setAttribute("content", on ? "#f3f1ec" : "#184f95");
     document.getElementById("camHint").textContent = camHintText();
   };
   cb.checked = document.documentElement.classList.contains("ui-banco");
   if (cb.checked) document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f3f1ec");
   cb.addEventListener("change", () => {
-    try { localStorage.setItem("fs_ui", cb.checked ? "banco" : ""); } catch (e) {}
+    try { localStorage.setItem("fs_ui", cb.checked ? "mix" : ""); } catch (e) {}
     apply(cb.checked);
   });
 })();
@@ -2212,6 +2297,7 @@ document.getElementById("cfCode").addEventListener("input", (e) => {
   const found = extractCode(v);
   if (found) e.target.value = found.code;
 });
+document.getElementById("cfCode").addEventListener("input", (e) => { if (pending) paintSheetGame(gameKey(e.target.value)); });
 function renderDiag() {
   renderEventBox();
   const box = document.getElementById("diagBox");
