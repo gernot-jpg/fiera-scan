@@ -289,6 +289,18 @@ border:none;background:#fff;color:var(--accent);display:flex;align-items:center;
 /* Mix: niente bottoni sopra la fotocamera. Il riavvio fotocamera (🔄) sparisce (ci pensa gia' il watchdog),
    la torcia scende nella fila in basso come quadrato accanto a "Leggi codice" (solo se il telefono la supporta). */
 html.ui-mix #camRestart{display:none}
+/* Mix, vendita senza codice: tutta in blu notte e oro (come proposta "Ticket") per capire a colpo
+   d'occhio in che modalita' si e'. Il pannello di conferma resta chiaro (leggibilita' del prezzo). */
+html.ui-mix #scanView.photoMode{--bg:#0f1130;--panel:#1a1d45;--panel2:#1a1d45;--line:#2c3070;--fg:#f2f1ff;--dim:#a9abd6;
+--accent:#f5b841;--accent2:#f5b841;color-scheme:dark}
+html.ui-mix #scanView.photoMode .captureBtn{color:#0f1130}
+html.ui-mix #scanView.photoMode .bHead{color:var(--fg)}
+html.ui-mix #scanView.photoMode .captureBtn:active{background:#d99a22}
+html.ui-mix #scanView.photoMode #torchBtn.on{color:#0f1130}
+html.ui-mix #scanView.photoMode .sheet{--bg:#f3f1ec;--panel:#fff;--panel2:#f7f5f0;--line:#d8d4ca;--fg:#16150f;--dim:#6b6860;
+--accent:#c2410c;--accent2:#c2410c;color-scheme:light}
+html.ui-mix:has(#scanView.active.photoMode) .tabs{--panel:#0b0d26;--line:#22265c;--fg:#f2f1ff;--dim:#a9abd6;--accent:#f5b841;
+background:#0b0d26;border-top-color:#22265c}
 /* torcia nascosta di default: compare solo con "Bottone luce" attivo in Advanced */
 html:not(.torchOn) #torchBtn{display:none!important}
 html.ui-mix .camControls{top:auto;right:12px;bottom:calc(var(--tabh) + 12px)}
@@ -656,6 +668,12 @@ function camHintText() {
   return autoScan ? "Inquadra il numero dell'etichetta vicino al riquadro: si legge da solo (o premi 📷)"
     : "Allinea il numero sull'etichetta nel riquadro, poi premi 📷";
 }
+function syncThemeColor() {
+  const html = document.documentElement;
+  const photo = MODE === "photo" && document.getElementById("scanView").classList.contains("active");
+  document.querySelector('meta[name="theme-color"]').setAttribute("content",
+    !html.classList.contains("ui-banco") ? "#184f95" : html.classList.contains("ui-mix") && photo ? "#0f1130" : "#f3f1ec");
+}
 function setMode(m) {
   if (m === MODE || document.getElementById("confirmSheet").classList.contains("show")) return;
   if (camSleeping) wakeAutoScan(); // la modalita' foto ha bisogno della fotocamera accesa
@@ -667,6 +685,7 @@ function setMode(m) {
   arrow.setAttribute("aria-label", photo ? "Torna alla scansione codice" : "Vendita senza codice");
   document.getElementById("camHint").textContent = camHintText();
   renderPayBar();
+  syncThemeColor();
 }
 document.getElementById("modeArrow").addEventListener("click", () => setMode(MODE === "photo" ? "code" : "photo"));
 (function initSwipe() {
@@ -934,6 +953,7 @@ document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () 
   document.querySelectorAll(".view").forEach((x) => x.classList.remove("active"));
   b.classList.add("active");
   document.getElementById(b.dataset.view).classList.add("active");
+  syncThemeColor();
   // scanView e' fullscreen (position:fixed;inset:0): la topbar condivisa, essendo sopra di
   // lei in z-index, altrimenti la coprirebbe in cima (banner relay, torcia) rubandole spazio.
   document.querySelector(".topbar").style.display = b.dataset.view === "scanView" ? "none" : "flex";
@@ -2288,11 +2308,11 @@ document.getElementById("eventChange").addEventListener("click", () => refreshEv
     document.documentElement.classList.toggle("ui-banco", on);
     document.documentElement.classList.toggle("ui-mix", on);
     renderRows();
-    document.querySelector('meta[name="theme-color"]').setAttribute("content", on ? "#f3f1ec" : "#184f95");
+    syncThemeColor();
     document.getElementById("camHint").textContent = camHintText();
   };
   cb.checked = document.documentElement.classList.contains("ui-banco");
-  if (cb.checked) document.querySelector('meta[name="theme-color"]').setAttribute("content", "#f3f1ec");
+  syncThemeColor();
   cb.addEventListener("change", () => {
     try { localStorage.setItem("fs_ui", cb.checked ? "mix" : ""); } catch (e) {}
     apply(cb.checked);
