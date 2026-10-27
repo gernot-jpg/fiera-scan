@@ -289,18 +289,21 @@ border:none;background:#fff;color:var(--accent);display:flex;align-items:center;
 /* Mix: niente bottoni sopra la fotocamera. Il riavvio fotocamera (🔄) sparisce (ci pensa gia' il watchdog),
    la torcia scende nella fila in basso come quadrato accanto a "Leggi codice" (solo se il telefono la supporta). */
 html.ui-mix #camRestart{display:none}
+/* torcia nascosta di default: compare solo con "Bottone luce" attivo in Advanced */
+html:not(.torchOn) #torchBtn{display:none!important}
 html.ui-mix .camControls{top:auto;right:12px;bottom:calc(var(--tabh) + 12px)}
 html.ui-mix #torchBtn{width:68px;height:68px;border-radius:18px;background:var(--panel);border:2px solid var(--line);color:var(--fg);
 flex-direction:column;gap:2px;font-size:22px}
 html.ui-mix #torchBtn::after{content:"Luce";font-size:12px;font-weight:700}
 html.ui-mix #torchBtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
-html.ui-mix .camWrap:has(#torchBtn:not([style*="none"])) .captureBtn{right:88px}
+html.ui-mix.torchOn .camWrap:has(#torchBtn:not([style*="none"])) .captureBtn{right:88px}
 /* "Vendita senza codice": titolo sotto la fotocamera, sopra pagamento e gioco (li' c'e' spazio) */
 html.ui-mix #scanView .camWrap .modeTitle{top:auto;left:12px;right:12px;bottom:calc(var(--tabh) + 92px + 62px);background:none;
 padding:0;border-radius:0;text-align:center;font-size:20px;font-weight:800;color:var(--fg)}
 </style>
 <script>
 // grafica scelta in Advanced, applicata prima del disegno della pagina (niente lampo di colori)
+try { if (localStorage.getItem("fs_torch_btn") === "1") document.documentElement.classList.add("torchOn"); } catch (e) {}
 try { if (["banco", "mix"].includes(localStorage.getItem("fs_ui"))) document.documentElement.classList.add("ui-banco", "ui-mix"); } catch (e) {}
 </script>
 
@@ -405,6 +408,11 @@ try { if (["banco", "mix"].includes(localStorage.getItem("fs_ui"))) document.doc
       border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
       <input type="checkbox" id="autoScanToggle" style="width:22px;height:22px">
       <span>Lettura automatica del codice<br><span style="font-size:12px;color:var(--dim)">spenta = si legge solo premendo 📷</span></span>
+    </label>
+    <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
+      border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
+      <input type="checkbox" id="torchToggle" style="width:22px;height:22px">
+      <span>Bottone luce (torcia)<br><span style="font-size:12px;color:var(--dim)">compare solo se il telefono la supporta</span></span>
     </label>
     <div id="diagBox" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;
       padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.6;word-break:break-all;color:var(--dim)"></div>
@@ -2299,6 +2307,17 @@ document.getElementById("eventChange").addEventListener("click", () => refreshEv
     if (!autoScan) setAutoIdle(false);
     localStorage.setItem("fs_autoscan", autoScan ? "1" : "0");
     if (MODE === "code") document.getElementById("camHint").textContent = camHintText();
+  });
+})();
+// Bottone luce on/off (Advanced): spento di default; spegnendolo si spegne anche la torcia.
+(function initTorchToggle() {
+  const cb = document.getElementById("torchToggle");
+  cb.checked = document.documentElement.classList.contains("torchOn");
+  cb.addEventListener("change", () => {
+    try { localStorage.setItem("fs_torch_btn", cb.checked ? "1" : "0"); } catch (e) {}
+    document.documentElement.classList.toggle("torchOn", cb.checked);
+    const btn = document.getElementById("torchBtn");
+    if (!cb.checked && btn.classList.contains("on")) btn.click();
   });
 })();
 // Testo incollato/dettato nel campo codice (es. «Scansiona testo» di iPhone, che porta con se'
