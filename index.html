@@ -119,6 +119,9 @@ border:1px solid rgba(255,255,255,.4);background:rgba(24,79,149,.8);color:#fff;b
 .mpItem .codeInput{margin-top:8px;font-size:18px;padding:10px}
 .mpTotal{text-align:center;font-size:15px;margin:6px 0 10px;color:var(--dim)}
 .mpLink{background:none;border:none;color:var(--accent2);font-size:14px;padding:6px 0}
+.mpPays{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.mpPays .mpMain{font-size:15px;margin-top:6px}
+#mpAddPay{display:block;width:100%;margin-top:8px;min-height:42px;border-radius:10px;border:1px dashed var(--line);background:transparent;color:var(--fg);font-size:14px;font-weight:600}
 .sheet.photo #cfPriceBlock,.sheet.price #cfPriceBlock{display:block}
 .sheet.price #cfCodeBlock{display:none}
 #cfCodeShow{display:none;text-align:center;font-size:20px;font-weight:700;letter-spacing:.5px}
@@ -1894,9 +1897,13 @@ document.getElementById("basketBar").addEventListener("click", () => {
   openMultiPanel();
 });
 let mpStep = 1, mpPayment = "";
+// Altri pagamenti della lista (es. Contanti 100 + Trade 300 su un totale di 400): {id, payment, amount}.
+// Il pagamento principale (mpPayment) prende il resto del totale.
+let mpExtras = [];
 function openMultiPanel() {
   mpStep = 1;
   mpPayment = PAYMENT;
+  mpExtras = [];
   renderMultiPanel();
   document.getElementById("multiPanel").hidden = false;
 }
@@ -1949,6 +1956,32 @@ function renderMultiPanel() {
       renderMultiPanel();
     });
   });
+  body.insertAdjacentHTML("beforeend", `<div class="mpPays">
+      <div class="mpTop" style="font-weight:700">Pagamento</div>
+      <div class="mpMain" id="mpMain"></div>
+      ${mpExtras.map((x) => `<div class="payLine" data-id="${x.id}">
+        <input class="codeInput" inputmode="decimal" placeholder="Importo ${escapeHtml(x.payment)}" autocomplete="off" value="${escapeHtml(x.amount)}" aria-label="Importo ${escapeHtml(x.payment)}">
+        <button type="button" class="plType" aria-label="Cambia tipo">${escapeHtml(x.payment)}</button>
+        <button type="button" class="plDel" aria-label="Togli pagamento">✕</button></div>`).join("")}
+      <button type="button" id="mpAddPay">+ Aggiungi pagamento</button>
+    </div>`);
+  body.querySelectorAll(".mpPays .payLine").forEach((el) => {
+    const x = mpExtras.find((e) => e.id === el.dataset.id);
+    const input = el.querySelector("input");
+    input.addEventListener("input", () => { x.amount = input.value; input.classList.remove("lowConf"); updateMultiTotal(); });
+    el.querySelector(".plType").addEventListener("click", () => {
+      openChoiceMenu("Tipo di pagamento", PAYMENTS.filter((p) => p !== mpPayment), x.payment, (p) => { x.payment = p; renderMultiPanel(); });
+    });
+    el.querySelector(".plDel").addEventListener("click", () => { mpExtras = mpExtras.filter((e) => e !== x); renderMultiPanel(); });
+  });
+  document.getElementById("mpAddPay").addEventListener("click", () => {
+    openChoiceMenu("Altro pagamento", PAYMENTS.filter((p) => p !== mpPayment), "", (p) => {
+      mpExtras.push({ id: uuid(), payment: p, amount: "" });
+      renderMultiPanel();
+      const inputs = document.querySelectorAll("#mpBody .mpPays .payLine input");
+      inputs[inputs.length - 1].focus();
+    });
+  });
   body.insertAdjacentHTML("beforeend", '<button class="mpLink" id="mpMore">‹ Continua a scansionare</button>');
   document.getElementById("mpMore").addEventListener("click", closeMultiPanel);
   document.getElementById("mpBack").textContent = "💳 " + mpPayment;
@@ -1959,10 +1992,39 @@ function renderMultiPanel() {
 function updateMultiTotal() {
   const sum = BASKET.reduce((a, b) => a + (parseAmount(b.price) || 0) * b.qty, 0);
   document.getElementById("mpTotal").textContent = "Totale: " + euro(sum);
+  const main = document.getElementById("mpMain");
+  if (!main) return;
+  if (!mpExtras.length) { main.innerHTML = `${escapeHtml(mpPayment)}: <b>${euro(sum)}</b>`; return; }
+  const rest = sum - mpExtras.reduce((a, x) => a + (parseAmount(x.amount) || 0), 0);
+  main.innerHTML = `${escapeHtml(mpPayment)}: <b style="color:${rest < -0.004 ? "var(--bad)" : "var(--fg)"}">${euro(rest)}</b> <span style="color:var(--dim);font-size:13px">(il resto)</span>`;
+}
+/* Pagamenti misti sulla lista: al sito ogni pezzo e' una vendita a se' (qty 1), quindi gli importi
+   di ogni tipo si dividono fra i pezzi in proporzione al prezzo, al centesimo: la somma per tipo
+   torna esatta e ogni pezzo somma esattamente al suo prezzo. */
+function splitBasketPayments(pieces, pays) {
+  const P = pieces.map((x) => Math.round(x.price * 100));
+  const C = pays.map((x) => Math.round(x.amount * 100));
+  let T = P.reduce((a, b) => a + b, 0); // totale ancora da dividere
+  const order = P.map((_, i) => i).sort((a, b) => P[a] - P[b]); // il piu' caro per ultimo
+  const out = P.map(() => pays.map(() => 0));
+  order.forEach((i, k) => {
+    if (k === order.length - 1) { pays.forEach((_, j) => { out[i][j] = C[j]; C[j] = 0; }); return; }
+    let left = P[i];
+    pays.forEach((_, j) => {
+      const s = Math.min(Math.round(C[j] * P[i] / T), C[j], left);
+      out[i][j] = s; C[j] -= s; left -= s;
+    });
+    T -= P[i];
+    for (let j = 0; left > 0 && j < pays.length; j++) { const s = Math.min(C[j], left); out[i][j] += s; C[j] -= s; left -= s; }
+  });
+  return out.map((row) => row.map((c, j) => ({ payment: pays[j].payment, amount: c / 100 })).filter((x) => x.amount > 0));
 }
 document.getElementById("mpBack").addEventListener("click", () => {
   if (mpStep === 2) {
-    openChoiceMenu("Tipo di pagamento", PAYMENTS, mpPayment, (p) => { mpPayment = p; renderMultiPanel(); });
+    openChoiceMenu("Tipo di pagamento", PAYMENTS, mpPayment, (p) => {
+      if (mpExtras.some((x) => x.payment === p)) { toast(p + " è già fra gli altri pagamenti"); return; }
+      mpPayment = p; renderMultiPanel();
+    });
     return;
   }
   closeMultiPanel();
@@ -1980,15 +2042,43 @@ document.getElementById("mpNext").addEventListener("click", async () => {
       return;
     }
   }
+  // altri pagamenti: importo obbligatorio, e insieme non devono superare il totale
+  let pays = null;
+  if (mpExtras.length) {
+    const total = BASKET.reduce((a, b) => a + parseAmount(b.price) * b.qty, 0);
+    for (const el of document.querySelectorAll("#mpBody .mpPays .payLine")) {
+      const input = el.querySelector("input");
+      if (!parseAmount(input.value)) {
+        input.classList.add("lowConf");
+        input.focus();
+        toast("Scrivi l'importo " + el.querySelector(".plType").textContent + " (es. 100)");
+        return;
+      }
+    }
+    const extra = mpExtras.reduce((a, x) => a + parseAmount(x.amount), 0);
+    const rest = Math.round((total - extra) * 100) / 100;
+    if (rest < 0) { toast("Gli altri pagamenti superano il totale (" + euro(total) + ")", 3000); return; }
+    pays = [{ payment: mpPayment, amount: rest }, ...mpExtras.map((x) => ({ payment: x.payment, amount: parseAmount(x.amount) }))];
+  }
   multiSending = true;
   try {
     const items = BASKET.slice();
     const rows = [];
-    for (const b of items) rows.push(await addScan(b.code, b.qty, mpPayment, parseAmount(b.price)));
+    if (pays) {
+      // un pezzo = una vendita (qty 1), ognuno con la sua parte di ogni pagamento
+      const pieces = items.flatMap((b) => Array.from({ length: b.qty }, () => ({ code: b.code, price: parseAmount(b.price) })));
+      const split = splitBasketPayments(pieces, pays);
+      for (let i = 0; i < pieces.length; i++) {
+        const sp = split[i];
+        rows.push(sp.length > 1
+          ? await addScan(pieces[i].code, 1, sp[0].payment, pieces[i].price, sp)
+          : await addScan(pieces[i].code, 1, sp.length ? sp[0].payment : mpPayment, pieces[i].price));
+      }
+    } else for (const b of items) rows.push(await addScan(b.code, b.qty, mpPayment, parseAmount(b.price)));
     BASKET = [];
     saveBasket();
     document.getElementById("multiPanel").hidden = true;
-    toast(`Registrate ${rows.length} vendite · ${mpPayment}`);
+    toast(`Registrate ${rows.length} vendite · ` + (pays ? pays.filter((x) => x.amount > 0).map((x) => x.payment + " " + euro(x.amount)).join(" + ") : mpPayment));
     await sendMany(rows);
     setTimeout(() => { scanPaused = false; }, 350);
   } finally {

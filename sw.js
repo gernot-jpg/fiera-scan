@@ -1,4 +1,4 @@
-const CACHE = "fiera-scan-v21";
+const CACHE = "fiera-scan-v22";
 // Base = cartella dove vive questo sw.js (es. "/" a radice, o "/fiera-scan/" su GitHub Pages
 // project page) — calcolata dal proprio URL cosi' funziona a qualunque profondita', senza
 // dover sapere in anticipo dove verra' pubblicata l'app.
