@@ -415,6 +415,11 @@ document.documentElement.classList.add("ui-banco", "ui-mix");
         <button id="eventChange" class="pill" style="min-height:44px">Cambia evento</button>
       </div>
     </div>
+    <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:2px solid var(--warn);
+      border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
+      <input type="checkbox" id="photoTestToggle" style="width:22px;height:22px">
+      <span>Prova foto (temporaneo)<br><span style="font-size:12px;color:var(--dim)">le vendite senza codice NON vanno al sito: solo foto su Drive, cartella «PROVA», a qualsiasi ora</span></span>
+    </label>
     <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
       border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
       <input type="checkbox" id="autoScanToggle" style="width:22px;height:22px">
@@ -716,6 +721,7 @@ async function addPhotoSale(p) {
     driveUpload: true }; // driveUpload: foto da copiare su Google Drive dopo lo scarico (righe piu' vecchie no)
   if (p.payments) row.payments = p.payments;
   if (p.test) row.test = true;
+  if (localStorage.getItem("fs_photo_test") === "1") { row.test = true; row.driveTest = true; }
   await idbPut("rows", row);
   return row;
 }
@@ -883,9 +889,10 @@ async function sendToSite(row, quantity) {
 /* Foto della vendita senza codice -> Google Drive (cartella evento/giorno), tramite il relay.
    Parte solo DOPO lo scarico riuscito; se fallisce la vendita resta valida e la foto si ritenta
    con la coda (il relay non la duplica: cerca prima per clientId). */
-const needsDriveUpload = (r) => r.kind === "photo" && r.driveUpload && !r.driveDone && !r.test && r.photo
+const needsDriveUpload = (r) => r.kind === "photo" && r.driveUpload && !r.driveDone && (!r.test || r.driveTest) && r.photo
   && isSendable(r) && (r.sentQty || 0) >= r.qty;
 async function uploadPhotoToDrive(r) {
+  if (!relayConfigured()) { r.driveError = "foto su Drive: telefono non collegato al relay"; await idbPut("rows", r); return; }
   const base = localStorage.getItem("fs_relay_url").replace(/\/$/, "");
   const tok = localStorage.getItem("fs_relay_token");
   const ctrl = new AbortController();
@@ -894,7 +901,7 @@ async function uploadPhotoToDrive(r) {
     const res = await fetch(base + "/relay/foto?token=" + encodeURIComponent(tok), {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
       body: JSON.stringify({
-        clientId: r.clientId, event: r.session, ts: r.createdAt || r.updatedAt, operator: localStorage.getItem("fs_operator_name") || "",
+        clientId: r.clientId, event: (r.test ? "PROVA - " : "") + r.session, ts: r.createdAt || r.updatedAt, operator: localStorage.getItem("fs_operator_name") || "",
         game: r.game, price: r.price ?? null, qty: r.qty,
         payment: r.payments && r.payments.length > 1 ? r.payments.map((p) => p.payment + " " + Number(p.amount).toFixed(2)).join(" + ") : r.payment,
         photo: r.photo,
@@ -2202,6 +2209,7 @@ async function trySendRowLocked(r) {
     r.sentQty = r.qty;
     r.lastError = null;
     await idbPut("rows", r);
+    if (needsDriveUpload(r)) await uploadPhotoToDrive(r); // prova foto: Drive si', sito no
     return { ok: true };
   }
   if (!isSendable(r)) return { ok: true }; // foto vecchia (prima dell'attivazione): solo locale
@@ -2449,6 +2457,16 @@ function renderEventBox() {
 document.getElementById("eventChange").addEventListener("click", () => refreshEvents().then(() => requireEvent(true)));
 syncThemeColor();
 // Lettura automatica on/off (Advanced): spenta = si legge solo premendo 📷 (risparmia batteria).
+// Prova foto (TEMPORANEO, per i test del 2026-10-29): vendite senza codice = righe PROVA che
+// non toccano il sito ma caricano la foto su Drive.
+(function initPhotoTestToggle() {
+  const cb = document.getElementById("photoTestToggle");
+  cb.checked = localStorage.getItem("fs_photo_test") === "1";
+  cb.addEventListener("change", () => {
+    localStorage.setItem("fs_photo_test", cb.checked ? "1" : "0");
+    toast(cb.checked ? "Prova foto ATTIVA: niente al sito, solo Drive" : "Prova foto spenta");
+  });
+})();
 (function initAutoScanToggle() {
   const cb = document.getElementById("autoScanToggle");
   cb.checked = autoScan;
