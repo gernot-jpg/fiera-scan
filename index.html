@@ -1,7 +1,7 @@
 <meta charset="utf-8">
 <title>Fiera Scan</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#184f95">
+<meta name="theme-color" content="#f3f1ec">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <!-- iOS ignora le icone del web manifest per "Aggiungi a Home": serve questo link dedicato -->
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -317,9 +317,10 @@ html.ui-mix #scanView .camWrap .modeTitle{top:auto;left:12px;right:12px;bottom:c
 padding:0;border-radius:0;text-align:center;font-size:20px;font-weight:800;color:var(--fg)}
 </style>
 <script>
-// grafica scelta in Advanced, applicata prima del disegno della pagina (niente lampo di colori)
+// classi di grafica applicate prima del disegno della pagina (niente lampo di colori)
 try { if (localStorage.getItem("fs_torch_btn") === "1") document.documentElement.classList.add("torchOn"); } catch (e) {}
-try { if (["banco", "mix"].includes(localStorage.getItem("fs_ui"))) document.documentElement.classList.add("ui-banco", "ui-mix"); } catch (e) {}
+// Grafica «Mix»: unica grafica dal 2026-10-29 (prima era una prova attivabile in Advanced).
+document.documentElement.classList.add("ui-banco", "ui-mix");
 </script>
 
 <div class="topbar" style="display:none">
@@ -414,11 +415,6 @@ try { if (["banco", "mix"].includes(localStorage.getItem("fs_ui"))) document.doc
         <button id="eventChange" class="pill" style="min-height:44px">Cambia evento</button>
       </div>
     </div>
-    <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
-      border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
-      <input type="checkbox" id="uiBancoToggle" style="width:22px;height:22px">
-      <span>Grafica nuova «Mix» (prova)<br><span style="font-size:12px;color:var(--dim)">chiara, pagamenti sempre visibili, colore per gioco, scorri per scaricare</span></span>
-    </label>
     <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
       border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
       <input type="checkbox" id="autoScanToggle" style="width:22px;height:22px">
@@ -2451,23 +2447,7 @@ function renderEventBox() {
   document.getElementById("eventCurrent").textContent = ev ? ev.name : "Nessun evento (" + SESSION + ")";
 }
 document.getElementById("eventChange").addEventListener("click", () => refreshEvents().then(() => requireEvent(true)));
-// Grafica "Banco" on/off (Advanced): solo su questo telefono.
-(function initUiToggle() {
-  const cb = document.getElementById("uiBancoToggle");
-  const apply = (on) => {
-    document.documentElement.classList.toggle("ui-banco", on);
-    document.documentElement.classList.toggle("ui-mix", on);
-    renderRows();
-    syncThemeColor();
-    document.getElementById("camHint").textContent = camHintText();
-  };
-  cb.checked = document.documentElement.classList.contains("ui-banco");
-  syncThemeColor();
-  cb.addEventListener("change", () => {
-    try { localStorage.setItem("fs_ui", cb.checked ? "mix" : ""); } catch (e) {}
-    apply(cb.checked);
-  });
-})();
+syncThemeColor();
 // Lettura automatica on/off (Advanced): spenta = si legge solo premendo 📷 (risparmia batteria).
 (function initAutoScanToggle() {
   const cb = document.getElementById("autoScanToggle");
