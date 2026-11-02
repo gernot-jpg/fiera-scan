@@ -3054,7 +3054,7 @@ function tabCodeHTML() {
     <div class="tHead"><span class="tLbl" style="flex:1">${n > 1 ? "Carte in vendita · " + n : "Carta letta"}</span><button type="button" class="tX" data-a="cancel" aria-label="Annulla vendita">${TI_X}</button></div>
     <div class="tBody"><div class="tList">${rows}</div>
       <span class="tHint">${TAB.addMore ? "Inquadra la prossima carta…" : (n > 1 ? "Il tastierino scrive nella carta evidenziata" : "«Scansiona ancora» per aggiungere un'altra carta")}</span>
-      ${tabQuickHTML()}<div class="tKp">${tabKeysHTML()}${tabPaysHTML()}</div>${tabMixHTML()}</div>
+      <div class="tKp">${tabKeysHTML()}${tabPaysHTML()}</div>${tabMixHTML()}</div>
     <div class="tFoot">${totLine}${tabFootHTML(tot, miss ? (n > 1 ? "Metti il prezzo a tutte le carte" : "Scrivi il prezzo col tastierino") : "")}</div>`;
 }
 function tabSplitHTML() {
@@ -3100,7 +3100,7 @@ function tabPhotoHTML() {
       <button type="button" class="tX" data-a="cancel" aria-label="Annulla">${TI_X}</button></div>
     <div class="tBody"><div style="display:flex;gap:10px;flex-shrink:0"><div class="tBigStep"><button type="button" data-a="pqty" data-v="-1" aria-label="Meno">−</button><span>${P.qty}</span><button type="button" data-a="pqty" data-v="1" aria-label="Più">+</button></div>
       <div class="tVal"><span style="font-size:13px;color:#6b6860;line-height:1.2">Valore<br>d'acquisto</span><span class="v">${P.price === "" ? '<span class="tPlaceholder">0,00</span>' : escapeHtml(P.price) + " €"}<span class="tCaret">|</span></span></div></div>
-      ${tabQuickHTML()}<div class="tKp">${tabKeysHTML()}${tabPaysHTML()}</div>${tabMixHTML()}</div>
+      <div class="tKp">${tabKeysHTML()}${tabPaysHTML()}</div>${tabMixHTML()}</div>
     <div class="tFoot">${tabFootHTML(p, isNaN(p) ? "Scrivi il valore d'acquisto" : "")}</div>`;
 }
 function tabRender() {
