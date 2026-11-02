@@ -1113,7 +1113,7 @@ function updateRelayBanner() {
   const banner = document.getElementById("relayWarnBanner");
   if (banner) banner.hidden = relayConfigured() || isTestMode();
   const tb = document.getElementById("testModeBanner");
-  if (tb) tb.hidden = !isTestMode();
+  if (tb) tb.hidden = true; // tolta su richiesta: copriva i bottoni (la prova si vede da Advanced e dalle righe PROVA)
   document.documentElement.classList.toggle("testMode", isTestMode());
 }
 
