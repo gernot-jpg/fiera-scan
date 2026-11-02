@@ -335,6 +335,10 @@ html.wide .view .pad{max-width:820px;margin:0 auto}
 #testBadge{top:calc(10px + env(safe-area-inset-top));left:10px}
 html.ui-banco #testBadge{top:calc(var(--bTop) + 10px);left:22px}
 html.ui-banco.testMode:not(.wide) #scanView .camWrap .modeTitle{top:calc(var(--bTop) + 42px)}
+/* iPad: il riquadro video e' quasi quadrato e la fotocamera orizzontale; con cover si vedeva
+   solo il centro (troppo zoomato, si avvicinava la carta e la messa a fuoco faticava).
+   contain = inquadratura intera, stessa scala del telefono. */
+html.wide #video{object-fit:contain;background:#000}
 html.wide #testBadge{top:calc(var(--tTop) + 12px)!important;left:36px!important}
 html.wide #testModeBanner{position:fixed;left:50%;transform:translateX(-50%);bottom:6px;z-index:31;padding:3px 6px 3px 12px;border-radius:999px;white-space:nowrap;font-size:12px}
 html.wide #relayWarnBanner{position:fixed;left:50%;transform:translateX(-50%);bottom:6px;z-index:30;padding:3px 12px;border-radius:999px;white-space:nowrap;opacity:.92;pointer-events:none}
@@ -1344,12 +1348,14 @@ function visibleVideoRect() {
   // rettangolo del <video> sullo schermo (nella grafica Banco e' una scheda, non tutto lo schermo)
   const wrapRect = video.getBoundingClientRect();
   const vw = video.videoWidth, vh = video.videoHeight;
-  const scale = Math.max(wrapRect.width / vw, wrapRect.height / vh);
+  // cover (telefono) riempie e taglia; contain (iPad) mostra tutta l'inquadratura con bande nere
+  const fit = getComputedStyle(video).objectFit === "contain" ? Math.min : Math.max;
+  const scale = fit(wrapRect.width / vw, wrapRect.height / vh);
   const offX = (wrapRect.width - vw * scale) / 2, offY = (wrapRect.height - vh * scale) / 2;
   return {
     x: Math.max(0, -offX / scale), y: Math.max(0, -offY / scale),
     w: Math.min(vw, wrapRect.width / scale), h: Math.min(vh, wrapRect.height / scale),
-    scale, offY, wrapTop: wrapRect.top,
+    scale, offX, offY, wrapTop: wrapRect.top, wrapLeft: wrapRect.left,
   };
 }
 function guideBandRect() {
@@ -1360,6 +1366,14 @@ function guideBandRect() {
   let y = cy - boxH * BAND_HEIGHT / 2, h = boxH * BAND_HEIGHT;
   if (y < 0) { h += y; y = 0; }
   if (y + h > video.videoHeight) h = video.videoHeight - y;
+  if (isTab()) {
+    // iPad: fascia larga 1,25 volte il riquadro (come sul telefono), non tutta l'inquadratura:
+    // immagine piu' piccola per l'OCR = lettura piu' veloce
+    const bw = boxRect.width / vis.scale * 1.25;
+    const cx = (boxRect.left + boxRect.width / 2 - vis.wrapLeft - vis.offX) / vis.scale;
+    const x = Math.max(vis.x, cx - bw / 2), w = Math.min(vis.x + vis.w, cx + bw / 2) - x;
+    return { x, y, w, h, boxH };
+  }
   return { x: vis.x, y, w: vis.w, h, boxH };
 }
 
