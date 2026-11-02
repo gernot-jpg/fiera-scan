@@ -315,12 +315,36 @@ html.ui-mix.torchOn .camWrap:has(#torchBtn:not([style*="none"])) .captureBtn{rig
 /* "Vendita senza codice": titolo sotto la fotocamera, sopra pagamento e gioco (li' c'e' spazio) */
 html.ui-mix #scanView .camWrap .modeTitle{top:auto;left:12px;right:12px;bottom:calc(var(--tabh) + 92px + 62px);background:none;
 padding:0;border-radius:0;text-align:center;font-size:20px;font-weight:800;color:var(--fg)}
+/* Solo verticale sui telefoni: iOS ignora "orientation" del manifest, quindi in orizzontale copriamo tutto */
+html.rotateBlock body::after{content:"↻\A Ruota il telefono in verticale";white-space:pre;position:fixed;inset:0;z-index:100000;
+display:flex;align-items:center;justify-content:center;text-align:center;background:#16150f;color:#f3f1ec;
+font:700 22px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+html.rotateBlock body{overflow:hidden}
 </style>
 <script>
 // classi di grafica applicate prima del disegno della pagina (niente lampo di colori)
 try { if (localStorage.getItem("fs_torch_btn") === "1") document.documentElement.classList.add("torchOn"); } catch (e) {}
 // Grafica «Mix»: unica grafica dal 2026-10-29 (prima era una prova attivabile in Advanced).
 document.documentElement.classList.add("ui-banco", "ui-mix");
+// Solo verticale sui TELEFONI (lato corto dello schermo < 600px; l'iPad resta libero).
+// Si guarda l'orientamento del dispositivo, non la finestra: la tastiera aperta non deve far scattare il blocco.
+(function () {
+  const isPhone = Math.min(screen.width, screen.height) < 600;
+  if (!isPhone) return;
+  const isLandscape = () => {
+    const t = screen.orientation && screen.orientation.type;
+    if (t) return t.indexOf("landscape") === 0;
+    if (typeof window.orientation === "number") return Math.abs(window.orientation) === 90;
+    return window.matchMedia("(orientation: landscape)").matches;
+  };
+  const apply = () => document.documentElement.classList.toggle("rotateBlock", isLandscape());
+  apply();
+  if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener("change", apply);
+  window.addEventListener("orientationchange", apply);
+  window.addEventListener("resize", apply);
+  // Android (app installata/schermo intero): blocco vero; altrove fallisce in silenzio.
+  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
+})();
 </script>
 
 <div class="topbar" style="display:none">
