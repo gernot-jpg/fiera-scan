@@ -332,6 +332,10 @@ html.wide .tabs button.active{background:var(--panel)}
 html.wide .view:not(#scanView){padding-top:16px;padding-bottom:24px}
 html.wide .topbar{min-height:64px;padding-top:10px;padding-right:440px}
 html.wide .view .pad{max-width:820px;margin:0 auto}
+#testBadge{top:calc(10px + env(safe-area-inset-top));left:10px}
+html.ui-banco #testBadge{top:calc(var(--bTop) + 10px);left:22px}
+html.ui-banco.testMode:not(.wide) #scanView .camWrap .modeTitle{top:calc(var(--bTop) + 42px)}
+html.wide #testBadge{top:calc(var(--tTop) + 12px)!important;left:36px!important}
 html.wide #testModeBanner{position:fixed;left:50%;transform:translateX(-50%);bottom:6px;z-index:31;padding:3px 6px 3px 12px;border-radius:999px;white-space:nowrap;font-size:12px}
 html.wide #relayWarnBanner{position:fixed;left:50%;transform:translateX(-50%);bottom:6px;z-index:30;padding:3px 12px;border-radius:999px;white-space:nowrap;opacity:.92;pointer-events:none}
 html.wide #payGrid,html.wide .payBar,html.wide .modeArrow,html.wide #basketBar,html.wide #confirmSheet,html.wide .hint,html.wide #multiPanel{display:none!important}
@@ -494,6 +498,8 @@ document.documentElement.classList.add("ui-banco", "ui-mix");
     ⚠️ Non collegato al sito: niente viene scaricato · codice in <b>Advanced</b>
   </div>
   <div class="camWrap">
+    <div id="testBadge" hidden style="position:absolute;z-index:6;background:var(--warn);color:#000;
+      font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;pointer-events:none;letter-spacing:.3px">🧪 PROVA</div>
     <div class="bHead"><div><div class="k">Evento</div><div class="v" id="bEvent"></div></div>
       <div><div class="k">Vendite</div><div class="v" id="bCount">0</div></div></div>
     <video id="video" playsinline muted></video>
@@ -1113,7 +1119,9 @@ function updateRelayBanner() {
   const banner = document.getElementById("relayWarnBanner");
   if (banner) banner.hidden = relayConfigured() || isTestMode();
   const tb = document.getElementById("testModeBanner");
-  if (tb) tb.hidden = true; // tolta su richiesta: copriva i bottoni (la prova si vede da Advanced e dalle righe PROVA)
+  if (tb) tb.hidden = true;
+  const tg = document.getElementById("testBadge");
+  if (tg) tg.hidden = !isTestMode(); // tolta su richiesta: copriva i bottoni (la prova si vede da Advanced e dalle righe PROVA)
   document.documentElement.classList.toggle("testMode", isTestMode());
 }
 
