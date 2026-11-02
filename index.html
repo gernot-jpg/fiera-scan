@@ -320,6 +320,125 @@ html.rotateBlock body::after{content:"↻\A Ruota il telefono in verticale";whit
 display:flex;align-items:center;justify-content:center;text-align:center;background:#16150f;color:#f3f1ec;
 font:700 22px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 html.rotateBlock body{overflow:hidden}
+/* ===== iPad / schermo largo (variante D, 2026-11-02): classe html.wide da 900px di larghezza in su.
+   Fotocamera a sinistra, pannello fisso a destra (lista carte + tastierino + pagamenti).
+   Sotto i 900px (telefono, iPad in verticale, finestra stretta) resta la grafica del telefono. ===== */
+.tabOnly{display:none}
+html.wide{--tabh:0px;--tPanel:440px;--tTop:84px;--tVidW:calc(100% - 68px - var(--tPanel))}
+@media (max-width:1100px){html.wide{--tPanel:400px}}
+html.wide .tabs{top:0;bottom:auto;left:auto;right:16px;height:64px;border:none;background:transparent;padding:10px 0;gap:4px;align-items:center}
+html.wide .tabs button{flex:none;flex-direction:row;gap:8px;padding:0 16px;height:44px;border-radius:12px;font-size:15px;font-weight:600}
+html.wide .tabs button.active{background:var(--panel)}
+html.wide .view:not(#scanView){padding-top:16px;padding-bottom:24px}
+html.wide .topbar{min-height:64px;padding-top:10px;padding-right:440px}
+html.wide .view .pad{max-width:820px;margin:0 auto}
+html.wide #relayWarnBanner{position:fixed;left:0;right:0;bottom:0;z-index:30;padding-top:10px}
+html.wide #payGrid,html.wide .payBar,html.wide .modeArrow,html.wide #basketBar,html.wide #confirmSheet,html.wide .hint,html.wide #multiPanel{display:none!important}
+html.ui-banco.wide .camWrap{--bTop:var(--tTop);--bVidH:calc(100% - var(--tTop) - 24px)}
+html.ui-banco.wide #scanView.photoMode .camWrap{--bVidH:calc(100% - var(--tTop) - 24px - 84px)}
+html.ui-banco.wide #video,html.ui-banco.wide .guide{left:24px;width:var(--tVidW)}
+html.ui-banco.wide .bHead{height:64px;align-items:center;padding:0 28px;right:auto;width:calc(100% - 430px);gap:28px}
+html.ui-banco.wide .bHead > div{display:flex;align-items:baseline;gap:12px}
+html.ui-banco.wide .camControls{right:calc(var(--tPanel) + 56px)}
+html.ui-banco.wide #autoWake{left:calc(24px + var(--tVidW) / 2)}
+html.wide #scanView .camWrap .modeTitle{display:none!important}
+html.ui-mix.wide #scanView .camWrap .modeTitle{top:calc(var(--tTop) + 16px);bottom:auto;left:24px;right:auto;width:var(--tVidW);color:#fff;font-size:22px}
+/* bottoni sulla fotocamera: Senza codice (sx) · Leggi codice (centro) · Scansiona ancora (dx) */
+html.ui-banco.wide .captureBtn{left:calc(24px + var(--tVidW) / 2);right:auto;transform:translateX(-50%);bottom:40px;width:170px;height:56px;border-radius:16px}
+html.ui-banco.wide .captureBtn::before{font-size:17px}
+html.ui-banco.wide #scanView.photoMode .captureBtn{left:auto;right:calc(var(--tPanel) + 60px);transform:none;bottom:124px;width:auto;padding:0 26px;height:64px;border-radius:32px;background:#f5b841;color:#0f1130}
+html.ui-banco.wide #scanView.photoMode .captureBtn::before{color:#0f1130;font-weight:900}
+html.wide .tabOnly{display:flex}
+#tabNoCode,#tabAgain{position:absolute;bottom:40px;z-index:4;height:56px;padding:0 18px;border-radius:16px;border:none;align-items:center;gap:8px;font-size:15px;font-weight:700}
+#tabNoCode{left:40px;background:#0f1130;color:#f5b841}
+#scanView.photoMode #tabNoCode{bottom:124px;background:#1a1d45;color:#f2f1ff;border:1px solid #2c3070}
+#tabAgain{right:calc(var(--tPanel) + 60px);background:#fff;color:var(--accent);font-size:17px;font-weight:800;padding:0 22px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+#tabAgain.ready{background:var(--accent);color:#fff}
+html.wide #scanView.photoMode #tabAgain{display:none}
+#tabGames{position:absolute;left:24px;width:var(--tVidW);bottom:24px;display:none!important;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;z-index:4}
+html.wide #scanView.photoMode #tabGames{display:grid!important}
+#tabGames button{height:56px;border-radius:14px;border:2px solid #2c3070;background:#1a1d45;color:#f2f1ff;font-size:15px;font-weight:700;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tabGames button.on{background:var(--gc,#f5b841);border-color:var(--gc,#f5b841);color:var(--gt,#0f1130);font-weight:800}
+html.wide .camWrap.tFlash .guide .box{border-color:#22c55e;box-shadow:0 0 0 2000px rgba(0,0,0,.28),0 0 0 6px rgba(34,197,94,.45)}
+/* pannello destro */
+#tabPanel{position:absolute;top:var(--tTop);right:24px;bottom:24px;width:var(--tPanel);z-index:6;flex-direction:column;overflow:hidden;
+border-radius:24px;background:#fff;color:#16150f;border:1px solid #d8d4ca;--fg:#16150f;--dim:#6b6860;--line:#d8d4ca;--panel2:#f7f5f0;--accent:#c2410c;color-scheme:light}
+#tabPanel .tStrip{height:8px;background:#c2410c;flex-shrink:0}
+#scanView.photoMode #tabPanel .tStrip{background:#f5b841}
+#tabPanel .tHead{padding:12px 20px 8px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+#tabPanel .tLbl{font-size:12px;font-weight:700;letter-spacing:2.4px;color:#6b6860;text-transform:uppercase}
+#tabPanel .tBody{padding:0 20px 10px;display:flex;flex-direction:column;gap:9px;flex:1;min-height:0}
+#tabPanel .tX{width:44px;height:44px;border-radius:12px;border:1px solid #d8d4ca;background:#f7f5f0;color:#16150f;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+#tabPanel .tX.plain{border:none;background:transparent;width:40px;height:40px;color:#6b6860}
+#tabPanel .tEmpty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#6b6860;text-align:center;padding:30px;font-size:15px}
+#tabPanel .tEmpty b{color:#16150f;font-size:19px}
+#tabPanel .tList{display:flex;flex-direction:column;gap:6px;max-height:208px;min-height:104px;overflow-y:auto;flex:0 1 auto}
+#tabPanel .trow{min-height:48px;padding:0 4px 0 10px;border-radius:12px;border:1px solid #d8d4ca;background:#fff;display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0}
+#tabPanel .trow.miss{border:2px solid #b91c1c;background:#fef2f2}
+#tabPanel .trow.act{border:2px solid #c2410c;background:#fff7ed;padding:6px 4px 6px 10px;cursor:default;flex-wrap:wrap;row-gap:6px}
+#tabPanel .trow.act .tLine2{flex-basis:100%;display:flex;align-items:center;gap:8px;padding-right:6px}
+#tabPanel .gchip{padding:3px 7px;border-radius:7px;background:var(--gc,#64748b);color:var(--gt,#fff);font-size:11px;font-weight:800;flex-shrink:0}
+#tabPanel .tcode{flex:1;min-width:0;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tabPanel input.tCode{flex:1;min-width:0;width:100%;height:40px;border:1px solid #d8d4ca;border-radius:10px;background:#fff;padding:0 8px;font:700 15px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#16150f;font-variant-numeric:tabular-nums;text-transform:uppercase}
+#tabPanel input.tCode.bad{border:2px solid #b45309;background:#fffbeb}
+#tabPanel .tqty{font-size:14px;color:#6b6860;flex-shrink:0}
+#tabPanel .trp{min-width:78px;text-align:right;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;flex-shrink:0}
+#tabPanel .trow.act .trp{font-size:22px;font-weight:900}
+#tabPanel .trow.miss .trp{font-size:13px;color:#b91c1c}
+#tabPanel .tCaret{color:#c2410c;animation:tBlink 1s steps(1) infinite}@keyframes tBlink{50%{opacity:0}}
+#tabPanel .tStep{display:flex;align-items:center;border-radius:10px;border:1px solid #d8d4ca;background:#fff;overflow:hidden;flex-shrink:0}
+#tabPanel .tStep button{width:34px;height:40px;border:none;background:#f7f5f0;font-size:18px;color:#16150f;padding:0}
+#tabPanel .tStep span{width:24px;text-align:center;font-size:15px;font-weight:800}
+#tabPanel .tHint{font-size:12px;color:#6b6860;padding-left:2px;flex-shrink:0}
+#tabPanel .tQuick{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;flex-shrink:0}
+#tabPanel .tQuick button{height:36px;border-radius:10px;border:1px solid #d8d4ca;background:#f7f5f0;color:#16150f;font-size:15px;font-weight:700;padding:0}
+#tabPanel .tKp{flex:1 0 auto;min-height:226px;display:flex;gap:12px}
+#tabPanel .tKeys{flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));gap:6px}
+#tabPanel .tKeys button{border-radius:12px;border:1px solid #d8d4ca;background:#fff;color:#16150f;font-size:24px;font-weight:700;min-height:40px;padding:0}
+#tabPanel .tKeys button:active,#tabPanel .tQuick button:active{background:#f3e3d9}
+#tabPanel .tKeys .bs{background:#f7f5f0;display:flex;align-items:center;justify-content:center}
+#tabPanel .tPays{width:128px;display:flex;flex-direction:column;gap:6px}
+#tabPanel .tPays .cap{font-size:10px;font-weight:700;color:#6b6860;text-align:center;line-height:1.2}
+#tabPanel .tPays .cap.hot{color:#c2410c}
+#tabPanel .tPays button{flex:1 1 0px;height:0;min-height:30px;display:flex;align-items:center;justify-content:center;border-radius:12px;border:2px solid #d8d4ca;background:#fff;color:#16150f;font-size:14px;font-weight:700;padding:0}
+#tabPanel .tPays.missing button{border-color:#b45309}
+#tabPanel .tPays button.main{background:#c2410c;border-color:#c2410c;color:#fff}
+#tabPanel .tPays button.sec{background:#16150f;border-color:#16150f;color:#fff}
+#tabPanel .tPays button.off{border-style:dashed;background:#f7f5f0;color:#a8a49a}
+#tabPanel .tAddPay{height:46px;border-radius:14px;border:2px solid #c2410c;background:#fff;color:#c2410c;font-size:15px;font-weight:800;flex-shrink:0}
+#tabPanel .tMix{min-height:46px;padding:0 4px 0 14px;border-radius:14px;border:2px solid #c2410c;background:#fff7ed;display:flex;align-items:center;gap:8px;flex-shrink:0;font-size:14px}
+#tabPanel .tMix.pick{border-style:dashed}
+#tabPanel .tFoot{padding:0 20px 18px;display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+#tabPanel .tTot{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+#tabPanel .tTot span:first-child{font-size:14px;color:#6b6860}
+#tabPanel .tTot b{font-size:20px;font-weight:900;font-variant-numeric:tabular-nums}
+#tabPanel .tSlide{position:relative;height:64px;border-radius:32px;background:#f3e3d9;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;touch-action:none;overflow:hidden}
+#tabPanel .tSlide .t{font-size:16px;font-weight:800;color:#9a3412;padding:0 12px 0 60px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tabPanel .tSlide .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:#c2410c;border-radius:32px}
+#tabPanel .tSlide .knob{position:absolute;left:6px;top:6px;width:52px;height:52px;border-radius:26px;background:#c2410c;color:#fff;display:flex;align-items:center;justify-content:center;border:none;padding:0;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+#tabPanel .tSlide.back .knob,#tabPanel .tSlide.back .fill{transition:transform .2s,width .2s}
+#tabPanel .tSlide.off{background:#ece9e2}#tabPanel .tSlide.off .t{color:#6b6860;padding-left:12px;font-size:15px}#tabPanel .tSlide.off .knob,#tabPanel .tSlide.off .fill{display:none}
+#tabPanel .tNext{height:64px;border-radius:32px;border:none;background:#c2410c;color:#fff;font-size:16px;font-weight:900;padding:0 14px}
+#tabPanel .tSum{padding:10px 14px;border-radius:14px;border:1px solid #d8d4ca;background:#f7f5f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#tabPanel .tSum .big{font-size:26px;font-weight:900;font-variant-numeric:tabular-nums}
+#tabPanel .tProw{min-height:48px;padding:0 4px 0 14px;border-radius:12px;border:1px solid #d8d4ca;background:#fff;display:flex;align-items:center;gap:10px;cursor:pointer;flex-shrink:0}
+#tabPanel .tProw.act{border:2px solid #c2410c;background:#fff7ed}
+#tabPanel .tProw .tchip{padding:4px 10px;border-radius:8px;background:#16150f;color:#fff;font-size:13px;font-weight:800}
+#tabPanel .tProw.princ{cursor:default}#tabPanel .tProw.princ .tchip{background:#c2410c}
+#tabPanel .tProw .note{flex:1;font-size:13px;color:#6b6860}
+#tabPanel .tProw.act .note{color:#9a3412;font-weight:600}
+#tabPanel .tProw .amt{font-size:20px;font-weight:900;font-variant-numeric:tabular-nums;padding-right:6px}
+#tabPanel .tProw.bad .amt{color:#b91c1c}
+#tabPanel .tBack{height:44px;padding:0 12px 0 8px;border-radius:12px;border:1px solid #d8d4ca;background:#f7f5f0;color:#16150f;font-size:14px;font-weight:700}
+#tabPanel .tThumb{width:54px;height:76px;border-radius:8px;border:2px solid #f5b841;object-fit:cover;flex-shrink:0;background:#e9e6f5}
+#tabPanel .tBigStep{display:flex;align-items:center;height:56px;border-radius:14px;border:1px solid #d8d4ca;overflow:hidden;flex-shrink:0}
+#tabPanel .tBigStep button{width:44px;height:56px;border:none;background:#f7f5f0;font-size:22px;color:#16150f;padding:0}
+#tabPanel .tBigStep span{width:34px;text-align:center;font-size:19px;font-weight:800}
+#tabPanel .tVal{flex:1;min-width:0;height:56px;padding:0 14px;border-radius:14px;border:2px solid #c2410c;display:flex;align-items:center;justify-content:space-between}
+#tabPanel .tVal .v{font-size:26px;font-weight:900;font-variant-numeric:tabular-nums}
+#tabPanel .tPlaceholder{color:#a8a49a;font-size:17px;font-weight:700}
+@media (hover:hover){html.wide #tabPanel button:hover,html.wide #tabNoCode:hover,html.wide #tabAgain:hover,html.wide #tabGames button:hover,html.wide .tabs button:hover{filter:brightness(.95)}
+html.wide #tabPanel .trow:not(.act):hover,html.wide #tabPanel .tProw:not(.princ):not(.act):hover{border-color:#a8a49a}}
 </style>
 <script>
 // classi di grafica applicate prima del disegno della pagina (niente lampo di colori)
@@ -344,6 +463,19 @@ document.documentElement.classList.add("ui-banco", "ui-mix");
   window.addEventListener("resize", apply);
   // Android (app installata/schermo intero): blocco vero; altrove fallisce in silenzio.
   try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
+})();
+// Layout largo (iPad orizzontale, finestra grande): classe html.wide. Decide la LARGHEZZA della
+// finestra, non il dispositivo: iPad in verticale o app affiancata stretta = grafica del telefono.
+(function () {
+  const root = document.documentElement;
+  const apply = () => {
+    const on = window.innerWidth >= 900 && window.innerHeight >= 560 && !root.classList.contains("rotateBlock");
+    if (on === root.classList.contains("wide")) return;
+    root.classList.toggle("wide", on);
+    document.dispatchEvent(new Event("fs-layout"));
+  };
+  apply();
+  window.addEventListener("resize", apply);
 })();
 </script>
 
@@ -375,6 +507,10 @@ document.documentElement.classList.add("ui-banco", "ui-mix");
     <div id="payGrid" role="radiogroup" aria-label="Tipo di pagamento"></div>
     <div class="payBar"><button id="payOpen" aria-haspopup="dialog"></button><button id="gameOpen" aria-haspopup="dialog"></button></div>
     <button id="basketBar" hidden></button>
+    <!-- Solo layout largo (iPad): bottoni sulla fotocamera + scelta gioco per la vendita senza codice -->
+    <button id="tabNoCode" class="tabOnly" type="button">Vendita senza codice</button>
+    <button id="tabAgain" class="tabOnly" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Scansiona ancora</button>
+    <div id="tabGames" class="tabOnly" role="radiogroup" aria-label="Gioco"></div>
     <div class="sheet" id="confirmSheet">
       <button id="cfX" type="button" aria-label="Annulla scansione">✕</button>
       <div id="cfCodeBlock">
@@ -410,6 +546,8 @@ document.documentElement.classList.add("ui-banco", "ui-mix");
       </div>
     </div>
   </div>
+  <!-- Solo layout largo (iPad): pannello fisso a destra, disegnato da tabRender() -->
+  <div id="tabPanel" class="tabOnly" aria-live="polite"></div>
 </div>
 
 <div class="view" id="listView">
@@ -448,6 +586,11 @@ document.documentElement.classList.add("ui-banco", "ui-mix");
       border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
       <input type="checkbox" id="torchToggle" style="width:22px;height:22px">
       <span>Bottone luce (torcia)<br><span style="font-size:12px;color:var(--dim)">compare solo se il telefono la supporta</span></span>
+    </label>
+    <label style="display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);
+      border-radius:12px;padding:12px;margin-bottom:14px;font-size:14px">
+      <input type="checkbox" id="camFrontToggle" style="width:22px;height:22px">
+      <span>Usa la fotocamera frontale<br><span style="font-size:12px;color:var(--dim)">per l'iPad su un supporto girato verso di te</span></span>
     </label>
     <div id="diagBox" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;
       padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.6;word-break:break-all;color:var(--dim)"></div>
@@ -1026,7 +1169,7 @@ const video = document.getElementById("video");
 
 
 async function startCamera() {
-  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 } } });
+  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: localStorage.getItem("fs_cam_front") === "1" ? "user" : "environment", width: { ideal: 1920 } } });
   video.srcObject = stream;
   await video.play();
   const track = stream.getVideoTracks()[0];
@@ -1456,7 +1599,7 @@ function readFrame() {
 let autoScan = localStorage.getItem("fs_autoscan") !== "0";
 let manualBusy = false, lastAccepted = null, barcodeTurn = false;
 function canScanNow() {
-  return ocrReady && !scanPaused && !manualBusy && MODE === "code" && !!PAYMENT && !camRestarting
+  return ocrReady && !scanPaused && !manualBusy && MODE === "code" && (!!PAYMENT || isTab()) && !camRestarting
     && document.visibilityState === "visible" && video.videoWidth > 0
     && document.getElementById("scanView").classList.contains("active");
 }
@@ -1541,9 +1684,10 @@ async function autoScanLoop() {
 
 const MANUAL_FRAMES = 4;
 document.getElementById("captureBtn").addEventListener("click", async () => {
+  if (isTab() && scanPaused && MODE === "code" && TAB.cards.length) { toast("Premi «Scansiona ancora» per leggere un'altra carta"); return; }
   if (scanPaused || manualBusy) return;
   if (MODE === "photo") {
-    if (!PAYMENT) { openPayMenu(); return; }
+    if (!PAYMENT && !isTab()) { openPayMenu(); return; }
     if (!video.videoWidth) { toast("Fotocamera non pronta"); return; }
     scanPaused = true;
     if (navigator.vibrate) navigator.vibrate(70);
@@ -1552,14 +1696,14 @@ document.getElementById("captureBtn").addEventListener("click", async () => {
     return;
   }
   if (!ocrReady || !ocrWorker) { toast("OCR ancora in caricamento, attendi un attimo…"); return; }
-  if (!PAYMENT) { openPayMenu(); return; }
+  if (!PAYMENT && !isTab()) { openPayMenu(); return; }
   manualBusy = true;
   // iPhone apre la tastiera solo se il focus arriva DENTRO il tocco, non dopo l'attesa della
   // lettura: si mette subito il cursore nel campo codice (pannello ancora nascosto), cosi' se
   // il codice non viene letto si scrive direttamente; se viene letto lo si trova gia' selezionato.
   const codeInput = document.getElementById("cfCode");
   codeInput.value = "";
-  codeInput.focus({ preventScroll: true });
+  if (!isTab()) codeInput.focus({ preventScroll: true }); // su iPad il codice si corregge nel pannello
   const btn = document.getElementById("captureBtn");
   btn.textContent = "⏳";
   try {
@@ -1628,6 +1772,7 @@ function paintSheetGame(key) {
 /* ---------- flusso: cattura -> codice modificabile + qty -> aggiungi ---------- */
 let pending = null; // { code, qty }
 function showConfirmSheet() {
+  if (isTab()) { tabFromPending(); return; }
   const input = document.getElementById("cfCode");
   const sheet = document.getElementById("confirmSheet");
   document.getElementById("qtyVal").textContent = pending.qty;
@@ -2597,6 +2742,524 @@ async function renderSessions() {
     setSession(el2.dataset.name);
     document.querySelector('.tab[data-view="listView"]').click();
   }));
+}
+
+/* ===================== iPad / schermo largo (variante D, 2026-11-02) =====================
+   Con html.wide (finestra >= 900px) la lettura non apre il foglio del telefono: ogni codice letto
+   entra nella lista "Carte in vendita" del pannello a destra. Il tastierino scrive il prezzo
+   della carta evidenziata (obbligatorio per ognuna), "Scansiona ancora" riprende la lettura.
+   Pagamento misto = 2 passi: prezzi delle carte, poi "Dividi il totale" (il principale prende
+   il resto). Lo scarico usa le stesse funzioni del telefono: addScan/addPhotoSale, sendMany/
+   autoSendRow, splitBasketPayments (righe, coda, retry, registro, foto su Drive invariati). */
+function isTab() { return document.documentElement.classList.contains("wide"); }
+const TAB_QUICK = ["0,50", "1", "2", "5", "10", "20"];
+const TAB_GAMES = [["Pokémon", "Pokémon"], ["Magic The Gathering", "Magic"], ["One Piece", "One Piece"], ["Yu-Gi-Oh!", "Yu-Gi-Oh!"], ["Riftbound", "Riftbound"]];
+let TAB = tabFresh(true);
+function tabFresh(restore) {
+  let cards = [];
+  if (restore) { try { cards = JSON.parse(localStorage.getItem("fs_tab_cart") || "[]").filter((c) => c && typeof c.code === "string"); } catch (e) {} }
+  return { cards, active: cards.length - 1, mixed: false, picking: false, second: null, step: 1, split: [], sact: 1, photo: null, addMore: false, busy: false };
+}
+function tabSave() { try { localStorage.setItem("fs_tab_cart", JSON.stringify(TAB.cards)); } catch (e) {} }
+const tNum = (s) => { const v = String(s == null ? "" : s).trim().replace(",", "."); return /^\d+(\.\d{1,2})?$/.test(v) ? Number(v) : NaN; };
+const tEur = (n) => isNaN(n) ? "—" : n.toFixed(2).replace(".", ",") + " €";
+const tR2 = (n) => Math.round(n * 100) / 100;
+const tPrefix = (code) => { const p = (code || "").split("-")[0]; return KNOWN_PREFIXES.includes(p) ? p : ""; };
+const tCodeOk = (code) => CODE_PATTERN.test(code) || isTestCode(code);
+const tGameKey = () => GAME_CODE_PREFIX[GAME] || "ALT";
+const TI_X = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const TI_BS = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 5H9l-6 7 6 7h12zM12 9l6 6M18 9l-6 6"/></svg>';
+const TI_GO = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+
+function tabTotal() {
+  if (MODE === "photo") return TAB.photo ? tNum(TAB.photo.price) : NaN; // valore come scritto, come sul telefono
+  let t = 0;
+  for (const c of TAB.cards) { const p = tNum(c.price); if (isNaN(p)) return NaN; t += p * c.qty; }
+  return tR2(t);
+}
+function tabPartial() { return tR2(TAB.cards.reduce((a, c) => a + (isNaN(tNum(c.price)) ? 0 : tNum(c.price) * c.qty), 0)); }
+function tabMissing() { return TAB.cards.filter((c) => isNaN(tNum(c.price))).length; }
+function tabRest() { let r = tabTotal(); for (let i = 1; i < TAB.split.length; i++) { const a = tNum(TAB.split[i].amount); if (!isNaN(a)) r -= a; } return tR2(r); }
+
+/* lettura (OCR/barcode o 📷) -> pannello. pending arriva da acceptCode o dalla cattura manuale. */
+function tabFromPending() {
+  const p = pending;
+  pending = null;
+  if (!p) return;
+  if (p.kind === "photo") {
+    TAB.photo = { photo: p.photo, qty: 1, price: TAB.photo ? TAB.photo.price : "" };
+    TAB.step = 1;
+    scanPaused = false; // in modalita' foto non c'e' lettura automatica: si puo' rifare la foto
+    tabRender();
+    return;
+  }
+  const code = (p.code || "").toUpperCase();
+  const bad = !p.partial && !CODE_PATTERN.test(code);
+  const card = { id: uuid(), code: bad ? "" : code, qty: 1, price: "", partial: !!p.partial,
+    unsure: bad || !!p.partial || (typeof p.confidence === "number" && p.confidence < 60) };
+  const cur = TAB.cards[TAB.active];
+  // lettura nuova senza "Scansiona ancora" e carta attuale ancora senza prezzo = correzione della lettura
+  if (cur && !TAB.addMore && cur.price === "") TAB.cards[TAB.active] = { ...card, qty: cur.qty };
+  else { TAB.cards.push(card); TAB.active = TAB.cards.length - 1; }
+  TAB.addMore = false;
+  TAB.step = 1;
+  tabSave();
+  tabFlash();
+  tabRender();
+  if (!card.code || card.partial) setTimeout(() => {
+    const i = document.querySelector("#tabPanel input.tCode");
+    if (i) { i.focus(); if (card.partial) i.setSelectionRange(0, 0); }
+  }, 60);
+}
+function tabFlash() {
+  const w = document.querySelector(".camWrap");
+  w.classList.add("tFlash");
+  setTimeout(() => w.classList.remove("tFlash"), 450);
+}
+
+function tabTarget() {
+  if (TAB.step === 2) return TAB.sact >= 1 && TAB.split[TAB.sact] ? [TAB.split[TAB.sact], "amount"] : null;
+  if (MODE === "photo") return TAB.photo ? [TAB.photo, "price"] : null;
+  return TAB.cards[TAB.active] ? [TAB.cards[TAB.active], "price"] : null;
+}
+function tabKey(k) {
+  const t = tabTarget();
+  if (!t) return;
+  const [obj, f] = t;
+  let v = obj[f] || "";
+  if (k === "bs") v = v.slice(0, -1);
+  else if (k === ",") { if (!v.includes(",")) v = (v || "0") + ","; }
+  else {
+    const dec = v.split(",")[1];
+    if (dec !== undefined && dec.length >= 2) return;
+    if (v === "0") v = "";
+    if (v.replace(",", "").length >= 6) return;
+    v += k;
+  }
+  obj[f] = v;
+  if (MODE !== "photo") tabSave();
+  tabRender();
+}
+function tabQuick(v) { const t = tabTarget(); if (!t) return; t[0][t[1]] = v; if (MODE !== "photo") tabSave(); tabRender(); }
+function tabSetMain(p) {
+  PAYMENT = p;
+  localStorage.setItem("fs_payment", PAYMENT);
+  renderPayBar();
+}
+function tabPickType(t) {
+  if (TAB.step === 2) {
+    if (TAB.sact < 1) return;
+    if (t === TAB.split[0].type) { toast(t + " è già il pagamento principale"); return; }
+    if (TAB.split.some((r, i) => i > 0 && i !== TAB.sact && r.type === t)) { toast(t + " è già usato"); return; }
+    TAB.split[TAB.sact].type = t;
+  } else if (TAB.mixed && TAB.picking) {
+    if (t === PAYMENT) { toast("Scegli un pagamento diverso da " + PAYMENT); return; }
+    TAB.second = t; TAB.picking = false;
+  } else {
+    if (TAB.mixed && t === TAB.second) TAB.second = PAYMENT || null;
+    tabSetMain(t);
+    if (TAB.mixed && !TAB.second) TAB.picking = true;
+  }
+  tabRender();
+}
+function tabAddPay() {
+  if (TAB.step === 2) {
+    const used = TAB.split.map((r) => r.type);
+    const t = PAYMENTS.find((x) => !used.includes(x));
+    if (!t) return;
+    TAB.split.push({ type: t, amount: "" });
+    TAB.sact = TAB.split.length - 1;
+  } else {
+    if (!PAYMENT) { toast("Prima scegli il pagamento principale a destra"); return; }
+    TAB.mixed = true; TAB.picking = true; TAB.second = null;
+    if (MODE === "photo" && TAB.photo && TAB.photo.qty > 1) { TAB.photo.qty = 1; toast("Con più pagamenti la quantità è 1"); }
+  }
+  tabRender();
+}
+function tabValidateCards() {
+  for (let i = 0; i < TAB.cards.length; i++) {
+    const c = TAB.cards[i];
+    if (isTestCode(c.code)) c.code = TEST_CODE;
+    if (!tCodeOk(c.code)) { TAB.active = i; tabRender(); toast("Correggi il codice: PREFISSO-NNN.NNN (es. MTG-261.417)", 3000); tabFocusCode(); return false; }
+    if (isNaN(tNum(c.price))) { TAB.active = i; tabRender(); toast("Metti il prezzo a ogni carta (anche 0)"); return false; }
+  }
+  return true;
+}
+function tabFocusCode() { setTimeout(() => { const i = document.querySelector("#tabPanel input.tCode"); if (i) i.focus(); }, 30); }
+function tabGoSplit() {
+  if (MODE === "photo") { if (isNaN(tabTotal())) { toast("Scrivi il valore d'acquisto"); return; } }
+  else if (!tabValidateCards()) return;
+  TAB.step = 2;
+  TAB.split = [{ type: PAYMENT }, { type: TAB.second, amount: "" }];
+  TAB.sact = 1;
+  tabRender();
+}
+function tabScanAgain() {
+  if (MODE === "photo") return;
+  if (TAB.step === 2) { toast("Torna ai prezzi per aggiungere carte"); return; }
+  const c = TAB.cards[TAB.active];
+  if (c) {
+    if (isTestCode(c.code)) c.code = TEST_CODE;
+    if (!tCodeOk(c.code)) { toast("Correggi il codice: PREFISSO-NNN.NNN", 3000); tabFocusCode(); return; }
+    if (isNaN(tNum(c.price))) { toast("Metti il prezzo a questa carta prima della prossima"); return; }
+    TAB.addMore = true;
+    tabSave();
+  }
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  scanPaused = false;
+  wakeAutoScan();
+  tabRender();
+  toast(c ? "Inquadra la prossima carta" : "Inquadra il codice");
+}
+async function tabCancel() {
+  if (MODE !== "photo" && TAB.cards.length > 1 && !(await customConfirm(`Annullare la vendita di ${TAB.cards.length} carte?`, "Annulla vendita", "Indietro"))) return;
+  TAB = tabFresh(false);
+  tabSave();
+  scanPaused = false;
+  tabRender();
+}
+function tabPaysList(total) {
+  // [{payment, amount}] del passo 2, senza importi a zero; null se non valido
+  const rest = tabRest();
+  if (rest < 0) { toast("Gli importi superano il totale (" + tEur(total) + ")", 3000); return null; }
+  const list = [{ payment: TAB.split[0].type, amount: rest }];
+  for (const r of TAB.split.slice(1)) {
+    const a = tNum(r.amount);
+    if (!(a > 0)) { toast("Scrivi l'importo " + r.type); return null; }
+    list.push({ payment: r.type, amount: a });
+  }
+  return list.filter((x) => x.amount > 0);
+}
+async function tabConfirm() {
+  if (TAB.busy) return;
+  if (!PAYMENT) { toast("Scegli il tipo di pagamento"); document.querySelector("#tabPanel .tPays").classList.add("missing"); return; }
+  TAB.busy = true;
+  try {
+    if (MODE === "photo") {
+      const P = TAB.photo;
+      const price = tNum(P && P.price);
+      if (!P || isNaN(price)) { toast("Scrivi il valore d'acquisto (anche 0)"); return; }
+      let pays = null;
+      if (TAB.step === 2) { pays = tabPaysList(price); if (!pays) return; }
+      const multi = pays && pays.length > 1;
+      const row = await addPhotoSale({ game: GAME, payment: pays ? pays[0].payment : PAYMENT, photo: P.photo,
+        price: multi ? totalOf(pays) : price, qty: multi ? 1 : P.qty, payments: multi ? pays : undefined });
+      toast("Registrata: " + GAME + " ×" + row.qty + " · " + paymentsText(row));
+      TAB = tabFresh(false);
+      tabSave();
+      tabRender();
+      autoSendRow(row.clientId);
+      renderRows();
+      return;
+    }
+    if (!TAB.cards.length || !tabValidateCards()) return;
+    let pays = null;
+    if (TAB.step === 2) { pays = tabPaysList(tabTotal()); if (!pays) return; }
+    const items = TAB.cards.slice();
+    const rows = [];
+    if (pays && pays.length > 1) {
+      // un pezzo = una vendita (qty 1) con la sua parte di ogni pagamento, come la scansione multipla del telefono
+      const pieces = items.flatMap((c) => Array.from({ length: c.qty }, () => ({ code: c.code, price: tNum(c.price) })));
+      const split = splitBasketPayments(pieces, pays);
+      for (let i = 0; i < pieces.length; i++) {
+        const sp = split[i];
+        rows.push(sp.length > 1
+          ? await addScan(pieces[i].code, 1, sp[0].payment, pieces[i].price, sp)
+          : await addScan(pieces[i].code, 1, sp.length ? sp[0].payment : pays[0].payment, pieces[i].price));
+      }
+    } else {
+      const pay = pays ? pays[0].payment : PAYMENT;
+      for (const c of items) rows.push(await addScan(c.code, c.qty, pay, tNum(c.price)));
+    }
+    TAB = tabFresh(false);
+    tabSave();
+    tabRender();
+    await sendMany(rows);
+    renderRows();
+  } finally {
+    TAB.busy = false;
+    setTimeout(() => { if (!TAB.cards.length) scanPaused = false; }, 350);
+  }
+}
+
+/* ---------- disegno ---------- */
+function tabKeysHTML() {
+  return `<div class="tKeys">${["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0"].map((k) => `<button type="button" data-a="key" data-v="${k}">${k}</button>`).join("")}<button type="button" class="bs" data-a="key" data-v="bs" aria-label="Cancella">${TI_BS}</button></div>`;
+}
+function tabQuickHTML() { return `<div class="tQuick">${TAB_QUICK.map((v) => `<button type="button" data-a="quick" data-v="${v}">${v} €</button>`).join("")}</div>`; }
+function tabPaysHTML() {
+  let cap = "", btns;
+  if (TAB.step === 2) {
+    btns = PAYMENTS.map((t) => `<button type="button" data-a="pay" data-v="${t}" class="${t === TAB.split[0].type ? "off" : (TAB.split[TAB.sact] && t === TAB.split[TAB.sact].type ? "sec" : "")}">${t}</button>`);
+  } else {
+    btns = PAYMENTS.map((t) => `<button type="button" data-a="pay" data-v="${t}" class="${t === PAYMENT ? "main" : (TAB.mixed && t === TAB.second ? "sec" : "")}">${t}</button>`);
+  }
+  return `<div class="tPays${!PAYMENT && TAB.step === 1 ? " missing" : ""}">${cap}${btns.join("")}</div>`;
+}
+function tabSlideHTML(label, enabled) {
+  return `<div class="tSlide${enabled ? "" : " off"}" id="tabSlide"><div class="fill"></div><span class="t">${escapeHtml(label)}</span><button type="button" class="knob" aria-label="Scarica (scorri a destra)">${TI_GO}</button></div>`;
+}
+function tabMixHTML() {
+  if (!TAB.mixed) return `<button type="button" class="tAddPay" data-a="addpay">+ Aggiungi pagamento</button>`;
+  return `<div class="tMix${TAB.picking ? " pick" : ""}"><span style="flex:1">${TAB.picking
+    ? `<b>Misto:</b> ${escapeHtml(PAYMENT)} + <span style="color:#c2410c">scegli a destra</span>`
+    : `<b>Misto: ${escapeHtml(PAYMENT)} + ${escapeHtml(TAB.second)}</b> <span style="color:#6b6860">· il totale lo dividi dopo</span>`}</span>
+    <button type="button" class="tX plain" data-a="nomix" aria-label="Togli pagamento misto">${TI_X}</button></div>`;
+}
+function tabFootHTML(total, missingLabel) {
+  if (missingLabel) return tabSlideHTML(missingLabel, false);
+  if (!PAYMENT) return tabSlideHTML("Scegli il tipo di pagamento", false);
+  if (TAB.mixed && TAB.picking) return tabSlideHTML("Scegli il secondo pagamento", false);
+  if (TAB.mixed) return `<button type="button" class="tNext" data-a="split">Avanti: dividi ${tEur(total)} fra ${escapeHtml(PAYMENT)} e ${escapeHtml(TAB.second)} →</button>`;
+  return tabSlideHTML("scorri per scaricare · " + tEur(total), true);
+}
+function tabCodeHTML() {
+  if (!TAB.cards.length) {
+    return `<div class="tStrip"></div><div class="tEmpty"><b>Nessuna carta letta</b>Inquadra il codice dell'etichetta nel riquadro:<br>la lettura è automatica.<br><span style="font-size:13px">Se non legge, premi «Leggi codice».</span></div>`;
+  }
+  const n = TAB.cards.length, pz = TAB.cards.reduce((a, c) => a + c.qty, 0);
+  const rows = TAB.cards.map((c, i) => {
+    const g = tPrefix(c.code);
+    const p = tNum(c.price);
+    if (i === TAB.active) {
+      return `<div class="trow act" ${g ? `data-g="${g}"` : ""}><span class="gchip">${g || "?"}</span>
+        <input class="tCode${!tCodeOk(c.code) || c.unsure ? " bad" : ""}" value="${escapeHtml(c.code)}" placeholder="MTG-261.417" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-label="Codice (correggi se serve)">
+        <button type="button" class="tX plain" data-a="rm" data-v="${i}" aria-label="Togli carta">${TI_X}</button>
+        <div class="tLine2"><div class="tStep"><button type="button" data-a="qty" data-v="-1" aria-label="Meno">−</button><span>${c.qty}</span><button type="button" data-a="qty" data-v="1" aria-label="Più">+</button></div>
+        <span style="flex:1;font-size:13px;color:#6b6860">prezzo al pezzo</span>
+        <span class="trp">${c.price === "" ? '<span class="tPlaceholder">—</span>' : escapeHtml(c.price) + " €"}<span class="tCaret">|</span></span></div></div>`;
+    }
+    return `<div class="trow${isNaN(p) ? " miss" : ""}" ${g ? `data-g="${g}"` : ""} data-a="sel" data-v="${i}"><span class="gchip">${g || "?"}</span>
+      <span class="tcode">${escapeHtml(c.code || "codice da scrivere")}</span><span class="tqty">×${c.qty}</span>
+      <span class="trp">${isNaN(p) ? "manca prezzo" : tEur(p)}</span>
+      <button type="button" class="tX plain" data-a="rm" data-v="${i}" aria-label="Togli carta">${TI_X}</button></div>`;
+  }).join("");
+  const miss = tabMissing(), tot = tabTotal();
+  const totLine = `<div class="tTot"><span>Totale · ${n} ${n > 1 ? "carte" : "carta"}, ${pz} ${pz > 1 ? "pezzi" : "pezzo"}</span><b>${tEur(miss ? tabPartial() : tot)}${miss ? ` <span style="font-size:13px;color:#b91c1c">+ ${miss} da prezzare</span>` : ""}</b></div>`;
+  return `<div class="tStrip"></div>
+    <div class="tHead"><span class="tLbl" style="flex:1">${n > 1 ? "Carte in vendita · " + n : "Carta letta"}</span><button type="button" class="tX" data-a="cancel" aria-label="Annulla vendita">${TI_X}</button></div>
+    <div class="tBody"><div class="tList">${rows}</div>
+      <span class="tHint">${TAB.addMore ? "Inquadra la prossima carta…" : (n > 1 ? "Il tastierino scrive nella carta evidenziata" : "«Scansiona ancora» per aggiungere un'altra carta")}</span>
+      ${tabQuickHTML()}<div class="tKp">${tabKeysHTML()}${tabPaysHTML()}</div>${tabMixHTML()}</div>
+    <div class="tFoot">${totLine}${tabFootHTML(tot, miss ? (n > 1 ? "Metti il prezzo a tutte le carte" : "Scrivi il prezzo col tastierino") : "")}</div>`;
+}
+function tabSplitHTML() {
+  const tot = tabTotal(), rest = tabRest();
+  const photo = MODE === "photo";
+  let sumLeft;
+  if (photo) sumLeft = `<span style="font-size:14px;color:#6b6860">Vendita senza codice</span><span class="gchip" data-g="${tGameKey()}" style="align-self:flex-start">${escapeHtml(GAME)}</span>`;
+  else {
+    const n = TAB.cards.length, pz = TAB.cards.reduce((a, c) => a + c.qty, 0);
+    sumLeft = `<span style="font-size:14px;color:#6b6860">${n} ${n > 1 ? "carte" : "carta"} · ${pz} ${pz > 1 ? "pezzi" : "pezzo"}</span><span style="display:flex;gap:4px;flex-wrap:wrap">${TAB.cards.map((c) => `<span class="gchip" data-g="${tPrefix(c.code)}" style="font-size:10px;padding:2px 6px">${tPrefix(c.code)}</span>`).join("")}</span>`;
+  }
+  const rows = TAB.split.map((r, i) => {
+    if (i === 0) return `<div class="tProw princ${rest < 0 ? " bad" : ""}"><span class="tchip">${escapeHtml(r.type)}</span><span class="note">principale · prende il resto</span><span class="amt">${tEur(rest)}</span></div>`;
+    const act = i === TAB.sact;
+    return `<div class="tProw${act ? " act" : ""}" data-a="srow" data-v="${i}"><span class="tchip">${escapeHtml(r.type)}</span><span class="note">${act ? "quanto in " + escapeHtml(r.type) + "?" : "tocca per modificare"}</span>
+      <span class="amt">${r.amount === "" ? '<span class="tPlaceholder">importo</span>' : escapeHtml(r.amount) + " €"}${act ? '<span class="tCaret">|</span>' : ""}</span>
+      <button type="button" class="tX plain" data-a="srm" data-v="${i}" aria-label="Togli pagamento">${TI_X}</button></div>`;
+  }).join("");
+  const ok = rest >= 0 && TAB.split.slice(1).every((r) => tNum(r.amount) > 0);
+  const label = rest < 0 ? "Gli importi superano il totale" : (!ok ? "Scrivi l'importo di ogni pagamento"
+    : "scorri · " + TAB.split.map((r, i) => r.type + " " + tEur(i === 0 ? rest : tNum(r.amount)).replace(" €", "").replace(",00", "")).join(" + "));
+  return `<div class="tStrip"></div>
+    <div class="tHead"><button type="button" class="tBack" data-a="back">‹ ${photo ? "Valore" : "Prezzi carte"}</button><span class="tLbl" style="flex:1;text-align:right">Passo 2 di 2 · dividi il totale</span></div>
+    <div class="tBody">
+      <div class="tSum"><div style="display:flex;flex-direction:column;gap:4px">${sumLeft}</div>
+        <div style="text-align:right"><div style="font-size:12px;color:#6b6860">${photo ? "Valore d'acquisto" : "Totale dalle carte"}</div><div class="big">${tEur(tot)}</div></div></div>
+      <span class="tLbl" style="padding-top:2px">Pagamenti · ${TAB.split.length}</span>
+      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">${rows}</div>
+      <div class="tKp">${tabKeysHTML()}${tabPaysHTML()}</div>
+      ${TAB.split.length < PAYMENTS.length ? '<button type="button" class="tAddPay" data-a="addpay">+ Aggiungi un altro pagamento</button>' : ""}
+    </div>
+    <div class="tFoot">${tabSlideHTML(label, ok)}</div>`;
+}
+function tabPhotoHTML() {
+  const P = TAB.photo;
+  if (!P) return `<div class="tStrip"></div><div class="tEmpty"><b>Scatta la foto della carta</b>Scegli il gioco sotto la fotocamera,<br>poi premi «Scatta foto».</div>`;
+  const p = tNum(P.price);
+  return `<div class="tStrip"></div>
+    <div class="tHead" style="align-items:flex-start"><img class="tThumb zoomable" src="${P.photo}" alt="Foto della carta">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><span class="tLbl">Senza codice</span>
+        <span style="display:flex;align-items:center;gap:8px;font-size:17px;font-weight:800;min-width:0"><span class="gchip" data-g="${tGameKey()}">${escapeHtml(tGameKey() === "ALT" ? "ALTRO" : tGameKey())}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(GAME)}</span></span>
+        <span style="font-size:12px;color:#6b6860">Premi di nuovo «Scatta foto» per rifarla</span></div>
+      <button type="button" class="tX" data-a="cancel" aria-label="Annulla">${TI_X}</button></div>
+    <div class="tBody"><div style="display:flex;gap:10px;flex-shrink:0"><div class="tBigStep"><button type="button" data-a="pqty" data-v="-1" aria-label="Meno">−</button><span>${P.qty}</span><button type="button" data-a="pqty" data-v="1" aria-label="Più">+</button></div>
+      <div class="tVal"><span style="font-size:13px;color:#6b6860;line-height:1.2">Valore<br>d'acquisto</span><span class="v">${P.price === "" ? '<span class="tPlaceholder">0,00</span>' : escapeHtml(P.price) + " €"}<span class="tCaret">|</span></span></div></div>
+      ${tabQuickHTML()}<div class="tKp">${tabKeysHTML()}${tabPaysHTML()}</div>${tabMixHTML()}</div>
+    <div class="tFoot">${tabFootHTML(p, isNaN(p) ? "Scrivi il valore d'acquisto" : "")}</div>`;
+}
+function tabRender() {
+  if (!isTab()) return;
+  const panel = document.getElementById("tabPanel");
+  const oldList = panel.querySelector(".tList");
+  const keepTop = oldList ? oldList.scrollTop : 0;
+  const focusedCode = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains("tCode");
+  const caret = focusedCode ? document.activeElement.selectionStart : null;
+  panel.innerHTML = TAB.step === 2 ? tabSplitHTML() : (MODE === "photo" ? tabPhotoHTML() : tabCodeHTML());
+  // la lista tiene la posizione e mostra sempre la carta attiva (appena aggiunta = in fondo)
+  const list = panel.querySelector(".tList");
+  if (list) { list.scrollTop = keepTop; const act = list.querySelector(".trow.act"); if (act) act.scrollIntoView({ block: "nearest" }); }
+  if (focusedCode) { const i = panel.querySelector("input.tCode"); if (i) { i.focus(); try { i.setSelectionRange(caret, caret); } catch (e) {} } }
+  const slide = document.getElementById("tabSlide");
+  if (slide && !slide.classList.contains("off")) tabBindSlide(slide);
+  // bottoni sulla fotocamera
+  const photo = MODE === "photo";
+  document.getElementById("tabNoCode").textContent = photo ? "‹ Torna al codice" : "Vendita senza codice";
+  const again = document.getElementById("tabAgain");
+  const c = TAB.cards[TAB.active];
+  again.classList.toggle("ready", !!c && !TAB.addMore && TAB.step === 1 && tCodeOk(c.code) && !isNaN(tNum(c.price)));
+  again.style.visibility = TAB.cards.length ? "" : "hidden"; // senza carte la lettura e' gia' attiva
+  const games = document.getElementById("tabGames");
+  const otherOn = !TAB_GAMES.some((g) => g[0] === GAME);
+  games.innerHTML = TAB_GAMES.map(([g, label]) => `<button type="button" role="radio" aria-checked="${g === GAME}" data-g="${GAME_CODE_PREFIX[g] || ""}" class="${g === GAME ? "on" : ""}" data-game="${escapeHtml(g)}">${escapeHtml(label)}</button>`).join("")
+    + `<button type="button" data-game="" class="${otherOn ? "on" : ""}" ${otherOn ? 'style="--gc:#f5b841;--gt:#0f1130"' : ""}>${otherOn ? escapeHtml(GAME) : "Altri ▾"}</button>`;
+}
+function tabBindSlide(track) {
+  const knob = track.querySelector(".knob"), fill = track.querySelector(".fill");
+  let x0 = null, dx = 0;
+  const max = () => track.clientWidth - knob.offsetWidth - 12;
+  const paint = (x) => { knob.style.transform = `translateX(${x}px)`; fill.style.width = (x + 58) + "px"; };
+  const reset = () => { track.classList.add("back"); dx = 0; knob.style.transform = ""; fill.style.width = "0"; setTimeout(() => track.classList.remove("back"), 220); };
+  knob.addEventListener("pointerdown", (e) => { x0 = e.clientX; dx = 0; track.classList.remove("back"); knob.setPointerCapture(e.pointerId); });
+  knob.addEventListener("pointermove", (e) => { if (x0 === null) return; dx = Math.max(0, Math.min(max(), e.clientX - x0)); paint(dx); });
+  const end = () => {
+    if (x0 === null) return;
+    x0 = null;
+    if (dx >= max() * 0.9) { paint(max()); tabConfirm(); }
+    else { if (dx < 8) toast("Trascina la freccia fino in fondo per scaricare"); reset(); }
+  };
+  knob.addEventListener("pointerup", end);
+  knob.addEventListener("pointercancel", () => { x0 = null; reset(); });
+  knob.addEventListener("click", (e) => { if (e.detail === 0) tabConfirm(); }); // Invio/Spazio da tastiera = gesto voluto
+}
+
+/* ---------- eventi ---------- */
+document.getElementById("tabPanel").addEventListener("click", (e) => {
+  const el = e.target.closest("[data-a]");
+  if (!el || TAB.busy) return;
+  const v = el.dataset.v;
+  switch (el.dataset.a) {
+    case "key": tabKey(v); break;
+    case "quick": tabQuick(v); break;
+    case "pay": tabPickType(v); break;
+    case "addpay": tabAddPay(); break;
+    case "nomix": TAB.mixed = false; TAB.picking = false; TAB.second = null; tabRender(); break;
+    case "split": tabGoSplit(); break;
+    case "back": TAB.step = 1; tabRender(); break;
+    case "cancel": tabCancel(); break;
+    case "sel": TAB.active = +v; tabRender(); break;
+    case "rm": {
+      e.stopPropagation();
+      TAB.cards.splice(+v, 1);
+      if (TAB.active >= TAB.cards.length) TAB.active = TAB.cards.length - 1;
+      else if (+v < TAB.active) TAB.active--;
+      tabSave();
+      if (!TAB.cards.length) { TAB = tabFresh(false); scanPaused = false; }
+      tabRender();
+      break;
+    }
+    case "qty": { const c = TAB.cards[TAB.active]; if (c) { c.qty = Math.max(1, c.qty + +v); tabSave(); tabRender(); } break; }
+    case "pqty": {
+      if (!TAB.photo) break;
+      if (+v > 0 && TAB.mixed) { toast("Con più pagamenti la quantità è 1"); break; }
+      TAB.photo.qty = Math.max(1, TAB.photo.qty + +v); tabRender(); break;
+    }
+    case "srow": if (+v > 0) { TAB.sact = +v; tabRender(); } break;
+    case "srm": {
+      e.stopPropagation();
+      TAB.split.splice(+v, 1);
+      if (TAB.split.length === 1) { TAB.step = 1; TAB.mixed = false; TAB.second = null; }
+      else TAB.sact = Math.min(Math.max(1, TAB.sact), TAB.split.length - 1);
+      tabRender();
+      break;
+    }
+  }
+});
+document.getElementById("tabPanel").addEventListener("input", (e) => {
+  if (!e.target.classList.contains("tCode")) return;
+  const c = TAB.cards[TAB.active];
+  if (!c) return;
+  c.code = e.target.value.toUpperCase().replace(/\s+/g, "");
+  c.partial = false;
+  c.unsure = false;
+  e.target.classList.toggle("bad", !tCodeOk(c.code));
+  const chip = e.target.parentElement.querySelector(".gchip");
+  const g = tPrefix(c.code);
+  chip.textContent = g || "?";
+  if (g) e.target.parentElement.dataset.g = g; else delete e.target.parentElement.dataset.g;
+  tabSave();
+});
+document.getElementById("tabPanel").addEventListener("keydown", (e) => {
+  if (e.target.classList.contains("tCode") && e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+});
+document.getElementById("tabAgain").addEventListener("click", tabScanAgain);
+document.getElementById("tabNoCode").addEventListener("click", () => {
+  if (MODE === "code") {
+    if (TAB.cards.length) { toast("Prima scarica o annulla la vendita in corso"); return; }
+    TAB = tabFresh(false);
+    setMode("photo");
+  } else {
+    TAB = tabFresh(false);
+    setMode("code");
+    scanPaused = false;
+  }
+  tabRender();
+});
+document.getElementById("tabGames").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const pick = (g) => { GAME = g; localStorage.setItem("fs_game", GAME); renderGameBtn(); tabRender(); };
+  if (b.dataset.game) pick(b.dataset.game);
+  else openChoiceMenu("Gioco", GAMES, GAME, pick);
+});
+// tastiera fisica (iPad con tastiera o Mac): cifre, virgola/punto, cancella; Invio = Scansiona ancora; frecce = carta sopra/sotto
+document.addEventListener("keydown", (e) => {
+  if (!isTab() || !document.getElementById("scanView").classList.contains("active")) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.closest && e.target.closest("input, textarea, select")) return;
+  if ([...document.querySelectorAll(".modalOverlay")].some((m) => !m.hidden)) return;
+  if (/^[0-9]$/.test(e.key)) tabKey(e.key);
+  else if (e.key === "," || e.key === ".") tabKey(",");
+  else if (e.key === "Backspace") { e.preventDefault(); tabKey("bs"); }
+  else if (e.key === "Enter") { if (MODE === "code" && TAB.step === 1) { e.preventDefault(); tabScanAgain(); } }
+  else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && MODE === "code" && TAB.step === 1 && TAB.cards.length) {
+    e.preventDefault();
+    TAB.active = Math.max(0, Math.min(TAB.cards.length - 1, TAB.active + (e.key === "ArrowUp" ? -1 : 1)));
+    tabRender();
+  }
+});
+// schermo sempre acceso sull'iPad mentre l'app e' aperta (dove Safari lo permette)
+let tabWake = null;
+async function tabWakeLock(on) {
+  try {
+    if (on && isTab() && document.visibilityState === "visible" && "wakeLock" in navigator && !tabWake) {
+      tabWake = await navigator.wakeLock.request("screen");
+      tabWake.addEventListener("release", () => { tabWake = null; });
+    } else if (!on && tabWake) { await tabWake.release(); tabWake = null; }
+  } catch (e) { sendDebug({ type: "wakeLock", message: e.message }); }
+}
+document.addEventListener("visibilitychange", () => tabWakeLock(document.visibilityState === "visible"));
+document.addEventListener("fs-layout", () => {
+  if (isTab()) {
+    if (document.getElementById("confirmSheet").classList.contains("show")) hideConfirmSheet(false);
+    scanPaused = TAB.cards.length > 0 && !TAB.addMore;
+    tabRender();
+    tabWakeLock(true);
+  } else {
+    scanPaused = false; // il telefono non vede la lista del pannello: la lettura riparte
+    tabWakeLock(false);
+  }
+});
+document.getElementById("camFrontToggle").checked = localStorage.getItem("fs_cam_front") === "1";
+document.getElementById("camFrontToggle").addEventListener("change", (e) => {
+  localStorage.setItem("fs_cam_front", e.target.checked ? "1" : "0");
+  restartCamera("facing");
+});
+if (isTab()) {
+  scanPaused = TAB.cards.length > 0; // lista ripresa dopo una chiusura: si continua da li'
+  tabRender();
+  tabWakeLock(true);
 }
 
 function requireOperatorName() {
