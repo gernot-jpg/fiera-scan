@@ -342,6 +342,13 @@ html.ui-banco.wide .camWrap{--bTop:var(--tTop);--bVidH:calc(100% - var(--tTop) -
 /* foto su iPad: fotocamera a tutta altezza e riempita (cover, niente nero); la foto salvata e'
    ritagliata su quello che si vede (captureCardPhoto) */
 html.wide #scanView.photoMode #video{object-fit:cover}
+/* lettura codice su iPad: fotocamera fino in cima e riempita (niente bande nere);
+   Evento/Vendite scritti sopra l'immagine, in bianco su sfumatura scura */
+html.ui-banco.wide #scanView:not(.photoMode) .camWrap{--bTop:16px;--bVidH:calc(100% - 40px)}
+html.wide #scanView:not(.photoMode) #video{object-fit:cover}
+html.ui-banco.wide #scanView:not(.photoMode) .bHead{top:16px;left:24px;width:var(--tVidW);height:64px;z-index:3;padding:0 24px;
+  border-radius:24px 24px 0 0;background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0));color:#fff;pointer-events:none}
+html.ui-banco.wide #scanView:not(.photoMode) .bHead .k{color:rgba(255,255,255,.75)}
 html.wide #scanView.photoMode .guide .cardBox{display:none}
 html.wide #scanView.photoMode{--tPanel:calc((100% - 68px) / 2);--tVidW:calc((100% - 68px) / 2)}
 /* codice su iPad: niente rettangolo, si legge ovunque; il riquadro resta invisibile come misura per l'OCR */
