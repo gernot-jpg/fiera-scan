@@ -694,7 +694,7 @@ document.documentElement.classList.add("ui-banco", "ui-mix");
   <div class="modalBox">
     <div class="modalMsg" style="font-weight:700;font-size:18px;text-align:center">Che carta è?</div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <button class="btnAdd" id="cardKindEvento" style="min-height:60px;font-size:19px;font-weight:800;border:none;border-radius:14px">Carta evento</button>
+      <button class="btnAdd" id="cardKindEvento" style="min-height:60px;font-size:19px;font-weight:800;border:none;border-radius:14px">Ritiro messo fuori</button>
       <button class="btnAdd" id="cardKindStock" style="min-height:60px;font-size:19px;font-weight:800;border:none;border-radius:14px;background:#16150f;color:#fff">Carta stock</button>
       <button class="btnCancel" id="cardKindBack" style="min-height:44px;border:none;border-radius:12px;font-size:15px">Indietro</button>
     </div>
@@ -2557,7 +2557,7 @@ async function renderRows() {
     if (r.kind === "photo") return `<div class="row" data-id="${r.clientId}" data-g="${gameKey("", r.game)}">
       <div class="rTop" style="gap:10px">
         ${r.photo ? `<img class="rThumb zoomable" src="${escapeHtml(r.photo)}" alt="Foto della carta">` : ""}
-        <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · <button class="rGame" aria-label="Cambia gioco">${escapeHtml(r.game)} ✎</button>${r.cardKind ? ` · <b>${r.cardKind === "evento" ? "CARTA EVENTO" : "Carta stock"}</b>` : ""}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(paymentsText(r))}</span>` : ""}${testTag(r)}</div>
+        <div class="rName">${r.integration ? "🔗 Integrazione trade" : "Senza codice"} · <button class="rGame" aria-label="Cambia gioco">${escapeHtml(r.game)} ✎</button>${r.cardKind ? ` · <b>${r.cardKind === "evento" ? "RITIRO MESSO FUORI" : "Carta stock"}</b>` : ""}${r.price != null ? " · € " + r.price.toFixed(2).replace(".", ",") : ""} ${r.payment ? `<span class="payTag">${escapeHtml(paymentsText(r))}</span>` : ""}${testTag(r)}</div>
         <button class="rDel" aria-label="Elimina vendita senza codice">✕</button>
       </div>
       <div class="rBottom">
@@ -2663,7 +2663,7 @@ document.getElementById("exportBtn").addEventListener("click", async () => {
   const header = ["Codice", "Quantity", "Payment", "Game", "Valore", "Tipo", "Session", "ScannedAt"];
   const csvLines = [header.join(",")].concat(rows.map((r) => [r.code || "", r.qty, paymentsText(r), r.game || "",
     r.price != null ? r.price.toFixed(2) : "",
-    (r.integration ? "integrazione trade" : r.kind === "photo" ? "senza codice" + (r.cardKind ? " - carta " + r.cardKind : "") : "codice") + (r.test ? " (PROVA)" : ""), r.session, r.updatedAt].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
+    (r.integration ? "integrazione trade" : r.kind === "photo" ? "senza codice" + (r.cardKind ? (r.cardKind === "evento" ? " - ritiro messo fuori" : " - carta stock") : "") : "codice") + (r.test ? " (PROVA)" : ""), r.session, r.updatedAt].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(",")));
   const blob = new Blob([csvLines.join("\n")], { type: "text/csv" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
