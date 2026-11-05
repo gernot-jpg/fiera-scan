@@ -342,6 +342,8 @@ html.ui-banco.wide .camWrap{--bTop:var(--tTop);--bVidH:calc(100% - var(--tTop) -
 /* foto su iPad: fotocamera a tutta altezza e riempita (cover, niente nero); la foto salvata e'
    ritagliata su quello che si vede (captureCardPhoto) */
 html.wide #scanView.photoMode #video{object-fit:cover}
+html.wide #scanView.photoMode .guide .cardBox{display:none}
+html.wide #scanView.photoMode{--tPanel:calc((100% - 68px) / 2);--tVidW:calc((100% - 68px) / 2)}
 /* codice su iPad: niente rettangolo, si legge ovunque; il riquadro resta invisibile come misura per l'OCR */
 html.wide .guide .box{opacity:0}
 html.wide .camWrap.tFlash #video{outline:6px solid #22c55e;outline-offset:-6px}
@@ -1376,25 +1378,6 @@ const OCR_VARIANTS = [
   { boxPx: 80, mode: "gray" },
   { boxPx: 40, mode: "gray" },
 ];
-// iPad: in mezzo alle varianti normali anche l'immagine girata di 90° nei due versi,
-// cosi' si legge anche l'etichetta in verticale
-const OCR_VARIANTS_TAB = [
-  { boxPx: 56, mode: "gray" },
-  { boxPx: 56, mode: "gray", rot: 90 },
-  { boxPx: 56, mode: "otsu" },
-  { boxPx: 56, mode: "gray", rot: -90 },
-  { boxPx: 80, mode: "gray" },
-  { boxPx: 40, mode: "gray" },
-];
-function rotateCanvas(src, deg) {
-  const c = document.createElement("canvas");
-  c.width = src.height; c.height = src.width;
-  const ctx = c.getContext("2d");
-  ctx.translate(c.width / 2, c.height / 2);
-  ctx.rotate(deg * Math.PI / 180);
-  ctx.drawImage(src, -src.width / 2, -src.height / 2);
-  return c;
-}
 function captureBand(band, variant) {
   const s = Math.min(4, variant.boxPx / band.boxH);
   const w = Math.max(1, Math.round(band.w * s)), h = Math.max(1, Math.round(band.h * s));
@@ -1422,7 +1405,7 @@ function captureBand(band, variant) {
     d[i] = d[i + 1] = d[i + 2] = v;
   }
   ctx.putImageData(img, 0, 0);
-  return variant.rot ? rotateCanvas(c, variant.rot) : c;
+  return c;
 }
 
 function cleanCode(raw) { return raw.replace(/\s+/g, "").toUpperCase(); }
@@ -1620,8 +1603,7 @@ let ocrQueue = Promise.resolve(), variantIdx = 0;
 function readFrame() {
   const run = ocrQueue.then(async () => {
     if (!video.videoWidth) return null;
-    const list = isTab() ? OCR_VARIANTS_TAB : OCR_VARIANTS;
-    const variant = list[variantIdx++ % list.length];
+    const variant = OCR_VARIANTS[variantIdx++ % OCR_VARIANTS.length];
     const { data } = await ocrWorker.recognize(captureBand(guideBandRect(), variant));
     const raw = (data.text || "").trim();
     const found = extractCode(raw);
@@ -3059,7 +3041,7 @@ function tabFootHTML(total, missingLabel) {
 }
 function tabCodeHTML() {
   if (!TAB.cards.length) {
-    return `<div class="tStrip"></div><div class="tEmpty"><b>Nessuna carta letta</b>Inquadra l'etichetta: si legge da sola,<br>ovunque nell'immagine, anche in verticale.<br><span style="font-size:13px">Se non legge, premi «Leggi codice».</span></div>`;
+    return `<div class="tStrip"></div><div class="tEmpty"><b>Nessuna carta letta</b>Inquadra l'etichetta: si legge da sola,<br>ovunque nell'immagine.<br><span style="font-size:13px">Se non legge, premi «Leggi codice».</span></div>`;
   }
   const n = TAB.cards.length, pz = TAB.cards.reduce((a, c) => a + c.qty, 0);
   const rows = TAB.cards.map((c, i) => {
