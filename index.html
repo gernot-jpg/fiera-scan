@@ -339,7 +339,12 @@ html.wide #video{object-fit:contain;background:#000}
 html.wide #relayWarnBanner{position:fixed;left:50%;transform:translateX(-50%);bottom:6px;z-index:30;padding:3px 12px;border-radius:999px;white-space:nowrap;opacity:.92;pointer-events:none}
 html.wide #payGrid,html.wide .payBar,html.wide .modeArrow,html.wide #basketBar,html.wide #confirmSheet,html.wide .hint,html.wide #multiPanel{display:none!important}
 html.ui-banco.wide .camWrap{--bTop:var(--tTop);--bVidH:calc(100% - var(--tTop) - 24px)}
-html.ui-banco.wide #scanView.photoMode .camWrap{--bVidH:calc(100% - var(--tTop) - 24px - 84px)}
+/* foto su iPad: fotocamera a tutta altezza e riempita (cover, niente nero); la foto salvata e'
+   ritagliata su quello che si vede (captureCardPhoto) */
+html.wide #scanView.photoMode #video{object-fit:cover}
+/* codice su iPad: niente rettangolo, si legge ovunque; il riquadro resta invisibile come misura per l'OCR */
+html.wide .guide .box{opacity:0}
+html.wide .camWrap.tFlash #video{outline:6px solid #22c55e;outline-offset:-6px}
 html.ui-banco.wide #video,html.ui-banco.wide .guide{left:24px;width:var(--tVidW)}
 html.ui-banco.wide .bHead{height:64px;align-items:center;padding:0 28px;right:auto;width:calc(100% - 430px);gap:28px}
 html.ui-banco.wide .bHead > div{display:flex;align-items:baseline;gap:12px}
@@ -350,17 +355,24 @@ html.ui-mix.wide #scanView .camWrap .modeTitle{top:calc(var(--tTop) + 16px);bott
 /* bottoni sulla fotocamera: Senza codice (sx) · Leggi codice (centro) · Scansiona ancora (dx) */
 html.ui-banco.wide .captureBtn{left:calc(24px + var(--tVidW) / 2);right:auto;transform:translateX(-50%);bottom:40px;width:170px;height:56px;border-radius:16px}
 html.ui-banco.wide .captureBtn::before{font-size:17px}
-html.ui-banco.wide #scanView.photoMode .captureBtn{left:auto;right:calc(var(--tPanel) + 60px);transform:none;bottom:124px;width:auto;padding:0 26px;height:64px;border-radius:32px;background:#f5b841;color:#0f1130}
+html.ui-banco.wide #scanView.photoMode .captureBtn{left:auto;right:calc(var(--tPanel) + 60px);transform:none;bottom:40px;width:auto;padding:0 26px;height:64px;border-radius:32px;background:#f5b841;color:#0f1130}
 html.ui-banco.wide #scanView.photoMode .captureBtn::before{color:#0f1130;font-weight:900}
 html.wide .tabOnly{display:flex}
 #tabNoCode,#tabAgain{position:absolute;bottom:40px;z-index:4;height:56px;padding:0 18px;border-radius:16px;border:none;align-items:center;gap:8px;font-size:15px;font-weight:700}
 #tabNoCode{left:40px;background:#0f1130;color:#f5b841}
-#scanView.photoMode #tabNoCode{bottom:124px;background:#1a1d45;color:#f2f1ff;border:1px solid #2c3070}
+#scanView.photoMode #tabNoCode{bottom:40px;background:#1a1d45;color:#f2f1ff;border:1px solid #2c3070}
 #tabAgain{right:calc(var(--tPanel) + 60px);background:#fff;color:var(--accent);font-size:17px;font-weight:800;padding:0 22px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 #tabAgain.ready{background:var(--accent);color:#fff}
 html.wide #scanView.photoMode #tabAgain{display:none}
 #tabGames{position:absolute;left:24px;width:var(--tVidW);bottom:24px;display:none!important;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;z-index:4}
-html.wide #scanView.photoMode #tabGames{display:grid!important}
+#tabPanel .tGames{width:104px;display:flex;flex-direction:column;gap:6px}
+#tabPanel .tGames button{flex:1 1 0px;height:0;min-height:30px;border-radius:12px;border:2px solid #d8d4ca;background:#fff;color:#16150f;font-size:13px;font-weight:700;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tabPanel .tGames button.on{background:var(--gc,#f5b841);border-color:var(--gc,#f5b841);color:var(--gt,#0f1130);font-weight:800}
+#tabPanel .tKp.photoKp{gap:8px}
+#tabPanel .tKp.photoKp .tPays{width:96px}
+#tabPanel .tGamesWide{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 20px 20px;flex-shrink:0}
+#tabPanel .tGamesWide button{height:52px;border-radius:12px;border:2px solid #d8d4ca;background:#fff;color:#16150f;font-size:15px;font-weight:700;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tabPanel .tGamesWide button.on{background:var(--gc,#f5b841);border-color:var(--gc,#f5b841);color:var(--gt,#0f1130);font-weight:800}
 #tabGames button{height:56px;border-radius:14px;border:2px solid #2c3070;background:#1a1d45;color:#f2f1ff;font-size:15px;font-weight:700;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #tabGames button.on{background:var(--gc,#f5b841);border-color:var(--gc,#f5b841);color:var(--gt,#0f1130);font-weight:800}
 html.wide .camWrap.tFlash .guide .box{border-color:#22c55e;box-shadow:0 0 0 2000px rgba(0,0,0,.28),0 0 0 6px rgba(34,197,94,.45)}
@@ -873,11 +885,13 @@ document.getElementById("modeArrow").addEventListener("click", () => setMode(MOD
   }, { passive: true });
 })();
 function captureCardPhoto() {
-  const vw = video.videoWidth, vh = video.videoHeight;
+  // iPad: la fotocamera e' riempita (cover) -> si salva solo la parte visibile, come la si vede
+  const v = isTab() ? visibleVideoRect() : { x: 0, y: 0, w: video.videoWidth, h: video.videoHeight };
+  const vw = v.w, vh = v.h;
   const k = Math.min(1, 900 / Math.max(vw, vh));
   const c = document.createElement("canvas");
   c.width = Math.round(vw * k); c.height = Math.round(vh * k);
-  c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
+  c.getContext("2d").drawImage(video, v.x, v.y, v.w, v.h, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.7);
 }
 async function addPhotoSale(p) {
@@ -1362,6 +1376,25 @@ const OCR_VARIANTS = [
   { boxPx: 80, mode: "gray" },
   { boxPx: 40, mode: "gray" },
 ];
+// iPad: in mezzo alle varianti normali anche l'immagine girata di 90° nei due versi,
+// cosi' si legge anche l'etichetta in verticale
+const OCR_VARIANTS_TAB = [
+  { boxPx: 56, mode: "gray" },
+  { boxPx: 56, mode: "gray", rot: 90 },
+  { boxPx: 56, mode: "otsu" },
+  { boxPx: 56, mode: "gray", rot: -90 },
+  { boxPx: 80, mode: "gray" },
+  { boxPx: 40, mode: "gray" },
+];
+function rotateCanvas(src, deg) {
+  const c = document.createElement("canvas");
+  c.width = src.height; c.height = src.width;
+  const ctx = c.getContext("2d");
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate(deg * Math.PI / 180);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+  return c;
+}
 function captureBand(band, variant) {
   const s = Math.min(4, variant.boxPx / band.boxH);
   const w = Math.max(1, Math.round(band.w * s)), h = Math.max(1, Math.round(band.h * s));
@@ -1389,7 +1422,7 @@ function captureBand(band, variant) {
     d[i] = d[i + 1] = d[i + 2] = v;
   }
   ctx.putImageData(img, 0, 0);
-  return c;
+  return variant.rot ? rotateCanvas(c, variant.rot) : c;
 }
 
 function cleanCode(raw) { return raw.replace(/\s+/g, "").toUpperCase(); }
@@ -1587,7 +1620,8 @@ let ocrQueue = Promise.resolve(), variantIdx = 0;
 function readFrame() {
   const run = ocrQueue.then(async () => {
     if (!video.videoWidth) return null;
-    const variant = OCR_VARIANTS[variantIdx++ % OCR_VARIANTS.length];
+    const list = isTab() ? OCR_VARIANTS_TAB : OCR_VARIANTS;
+    const variant = list[variantIdx++ % list.length];
     const { data } = await ocrWorker.recognize(captureBand(guideBandRect(), variant));
     const raw = (data.text || "").trim();
     const found = extractCode(raw);
@@ -3025,7 +3059,7 @@ function tabFootHTML(total, missingLabel) {
 }
 function tabCodeHTML() {
   if (!TAB.cards.length) {
-    return `<div class="tStrip"></div><div class="tEmpty"><b>Nessuna carta letta</b>Inquadra il codice dell'etichetta nel riquadro:<br>la lettura è automatica.<br><span style="font-size:13px">Se non legge, premi «Leggi codice».</span></div>`;
+    return `<div class="tStrip"></div><div class="tEmpty"><b>Nessuna carta letta</b>Inquadra l'etichetta: si legge da sola,<br>ovunque nell'immagine, anche in verticale.<br><span style="font-size:13px">Se non legge, premi «Leggi codice».</span></div>`;
   }
   const n = TAB.cards.length, pz = TAB.cards.reduce((a, c) => a + c.qty, 0);
   const rows = TAB.cards.map((c, i) => {
@@ -3086,7 +3120,7 @@ function tabSplitHTML() {
 }
 function tabPhotoHTML() {
   const P = TAB.photo;
-  if (!P) return `<div class="tStrip"></div><div class="tEmpty"><b>Scatta la foto della carta</b>Scegli il gioco sotto la fotocamera,<br>poi premi «Scatta foto».</div>`;
+  if (!P) return `<div class="tStrip"></div><div class="tEmpty"><b>Scatta la foto della carta</b>Scegli il gioco qui sotto,<br>poi premi «Scatta foto».</div><div class="tGamesWide">${tabGamesBtns()}</div>`;
   const p = tNum(P.price);
   return `<div class="tStrip"></div>
     <div class="tHead" style="align-items:flex-start"><img class="tThumb zoomable" src="${P.photo}" alt="Foto della carta">
@@ -3096,8 +3130,14 @@ function tabPhotoHTML() {
       <button type="button" class="tX" data-a="cancel" aria-label="Annulla">${TI_X}</button></div>
     <div class="tBody"><div style="display:flex;gap:10px;flex-shrink:0"><div class="tBigStep"><button type="button" data-a="pqty" data-v="-1" aria-label="Meno">−</button><span>${P.qty}</span><button type="button" data-a="pqty" data-v="1" aria-label="Più">+</button></div>
       <div class="tVal"><span style="font-size:13px;color:#6b6860;line-height:1.2">Valore<br>d'acquisto</span><span class="v">${P.price === "" ? '<span class="tPlaceholder">0,00</span>' : escapeHtml(P.price) + " €"}<span class="tCaret">|</span></span></div></div>
-      <div class="tKp">${tabKeysHTML()}${tabPaysHTML()}</div>${tabMixHTML()}</div>
+      <div class="tKp photoKp">${tabKeysHTML()}${tabPaysHTML()}<div class="tGames">${tabGamesBtns()}</div></div>${tabMixHTML()}</div>
     <div class="tFoot">${tabFootHTML(p, isNaN(p) ? "Scrivi il valore d'acquisto" : "")}</div>`;
+}
+// giochi nel pannello, accanto ai pagamenti (la barra sotto la fotocamera e' stata tolta)
+function tabGamesBtns() {
+  const otherOn = !TAB_GAMES.some((g) => g[0] === GAME);
+  return TAB_GAMES.map(([g, label]) => `<button type="button" role="radio" aria-checked="${g === GAME}" data-g="${GAME_CODE_PREFIX[g] || ""}" class="${g === GAME ? "on" : ""}" data-game="${escapeHtml(g)}">${escapeHtml(label)}</button>`).join("")
+    + `<button type="button" data-game="" class="${otherOn ? "on" : ""}" ${otherOn ? 'style="--gc:#f5b841;--gt:#0f1130"' : ""}>${otherOn ? escapeHtml(GAME) : "Altri ▾"}</button>`;
 }
 function tabRender() {
   if (!isTab()) return;
@@ -3216,8 +3256,8 @@ document.getElementById("tabNoCode").addEventListener("click", () => {
   }
   tabRender();
 });
-document.getElementById("tabGames").addEventListener("click", (e) => {
-  const b = e.target.closest("button");
+document.getElementById("tabPanel").addEventListener("click", (e) => {
+  const b = e.target.closest(".tGames button, .tGamesWide button");
   if (!b) return;
   const pick = (g) => { GAME = g; localStorage.setItem("fs_game", GAME); renderGameBtn(); tabRender(); };
   if (b.dataset.game) pick(b.dataset.game);
